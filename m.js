@@ -499,18 +499,19 @@
           body.appendChild(li); });
         return;
       }
-      var r = S.search(q, 60);
-      // vibe search: "new york", "college", "heist", "rainy"… also looks inside the story
-      if (q.length >= 4 && r.titles.length < 60) {
-        var nq = S.norm(q), have = {}; r.titles.forEach(function (x) { have[x.id] = 1; });
-        var more = S.ALL.filter(function (x) { return !have[x.id] && (x.avail || []).length && S.norm(x.desc || "").indexOf(nq) >= 0; })
-          .sort(function (a, b) { return (b.votes || 0) - (a.votes || 0); }).slice(0, 60 - r.titles.length);
-        r.titles = r.titles.concat(more);
+      var R = smartSearch(q);
+      chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
+      if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", "<b>No matches</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
+      if (R.top) {
+        var tp = h("div", "toprez"); tp.dataset.id = R.top.id; var ta = S.pickApp(R.top);
+        tp.innerHTML = '<div class="art"><img src="' + S.bd(R.top, "s1440") + '"><div class="g"></div>' + (ta ? '<img class="lg" src="' + LOGO[ta] + '">' : "") + '</div><div class="tx"><small>Top result</small><b>' + esc(R.top.title) +
+          "</b><span>" + [R.top.year, S.length(R.top), R.top.imdb ? "IMDb " + R.top.imdb.toFixed(1) : ""].filter(Boolean).join(" · ") + "</span></div>" +
+          (ta ? '<button class="btn play" data-play="' + R.top.id + '">' + G.play + "Play</button>" : "");
+        body.appendChild(tp);
       }
-      chips.innerHTML = r.people.map(function (p) { return '<button class="chip" data-q="' + esc(p) + '">' + esc(p) + "</button>"; }).join("") +
-        r.genres.map(function (g) { return '<button class="chip" data-q="' + esc(g) + '">' + esc(g) + "</button>"; }).join("");
-      if (!r.titles.length) { body.appendChild(h("div", "empty", "<b>No matches</b>Try a different spelling, an actor or a genre.")); return; }
-      body.appendChild(gridOf(r.titles));
+      if (R.titles.length) { body.appendChild(h("div", "sec-h", R.top ? "Also matching" : "Titles")); body.appendChild(gridOf(R.titles)); }
+      if (R.similar.length) { var row = rowEl(S.R("More like " + R.top.title, R.similar)); body.appendChild(row); row._fill(); }
+      if (R.vibe.length) { body.appendChild(h("div", "sec-h", "The “" + esc(R.label) + "” vibe")); body.appendChild(gridOf(R.vibe)); }
     }
     function saveQ() { var q = inp.value.trim(); if (q.length < 2) return; var l = S.list("queries").filter(function (x) { return x.toLowerCase() !== q.toLowerCase(); }); l.unshift(q); S.set("queries", l.slice(0, 12)); }
     inp.addEventListener("input", function () { clearTimeout(t); t = setTimeout(run, 120); });
@@ -520,6 +521,63 @@
     page.addEventListener("click", function (e) { var b = e.target.closest("[data-q]"); if (b) { inp.value = b.dataset.q; run(); saveQ(); } });
     run();
     if (!inp.value) setTimeout(function () { inp.focus(); }, 300);
+  }
+
+  // ---------- smart search: names first, then the vibe, eras understood ----------
+  var SYN = { rain: "rain|rainy|storm|monsoon|downpour|thunder", rainy: "rain|rainy|storm|monsoon", college: "college|university|campus|fraternity|frat|sorority|dorm|freshman",
+    casino: "casino|gambl|las vegas|vegas|poker|blackjack|roulette|bookie", vegas: "vegas|casino|gambl", heist: "heist|robbery|rob |thief|thieves|steal|vault|con artist",
+    school: "school|teen|student|classmate|campus", teen: "teen|high school|adolescen", spy: "spy|spies|agent|cia|mi6|espionage|undercover", detective: "detective|investigat|murder|inspector|sleuth",
+    space: "space|astronaut|planet|galaxy|alien", zombie: "zombie|undead|apocalyp", vampire: "vampire|blood|undead", christmas: "christmas|holiday|santa|xmas", summer: "summer|vacation|beach|camp",
+    love: "love|romance|romantic|relationship", wedding: "wedding|bride|groom|marriage|engaged", war: "war|soldier|battle|military|army", ocean: "ocean|sea|island|sail|ship|underwater",
+    snow: "snow|winter|arctic|frozen|ice", fog: "fog|mist|mysterious", murder: "murder|killer|homicide|serial", killer: "killer|murder|serial|assassin", hacker: "hacker|hacking|cyber|computer",
+    "new york": "new york|manhattan|brooklyn|nyc|queens", london: "london|british|england", paris: "paris|france|french", road: "road trip|road|journey|drive", sad: "grief|loss|tragic|heartbreak",
+    funny: "comedy|funny|hilarious", scary: "horror|terrif|haunt|scary", ghost: "ghost|haunt|spirit|paranormal", cop: "cop|police|detective|officer", lawyer: "lawyer|attorney|court|trial",
+    doctor: "doctor|hospital|surgeon|medical", sport: "sport|team|coach|football|basketball|baseball|boxing", music: "music|band|singer|musician|concert", dance: "dance|dancer|ballet" };
+  var STOP = { the: 1, a: 1, an: 1, and: 1, of: 1, with: 1, movie: 1, movies: 1, film: 1, films: 1, show: 1, shows: 1, series: 1, like: 1, about: 1, set: 1, in: 1, for: 1, vibe: 1, vibes: 1 };
+  function smartSearch(q) {
+    var words = S.norm(q).split(" ").filter(Boolean), era = null, keep = [];
+    words.forEach(function (w) {
+      var m = w.match(/^(\d{2}|\d{4})s$/), y = w.match(/^(19|20)\d{2}$/);
+      if (m) { var d = +m[1]; d = d < 100 ? (d >= 30 ? 1900 + d : 2000 + d) : d; era = [d, d + 9]; }
+      else if (y) era = [+w, +w];
+      else keep.push(w);
+    });
+    var rest = keep.join(" "), inEra = function (t) { return !era || (t.year >= era[0] && t.year <= era[1]); }, avail = function (t) { return (t.avail || []).length; };
+    // 1) names: the title you probably meant
+    var byName = rest ? S.search(rest, 80) : { titles: [], people: [], genres: [] };
+    var nr = S.norm(rest), named = byName.titles.filter(inEra).filter(function (t) { var k = S.norm(t.title); return k.indexOf(nr) < 0 || (" " + k).indexOf(" " + nr) >= 0; });   // "rain" shouldn't match "train"
+    var top = named.filter(function (t) { var k = S.norm(t.title); return nr && (k === nr || k.indexOf(nr) === 0 || (" " + k).indexOf(" " + nr) >= 0); })[0] || null;
+    // 2) the vibe: every word (with its look-alikes) found in the story, title or genres
+    var toks = keep.filter(function (w) { return w.length >= 3 && !STOP[w]; });
+    if (/new york/.test(rest)) toks = toks.filter(function (w) { return w !== "new" && w !== "york"; }).concat(["new york"]);
+    var pats = toks.map(function (w) { var syn = SYN[w] || (w.length > 5 ? w.slice(0, w.length - 2) : w); return new RegExp("\\b(?:" + syn.split("|").map(function (x) { return x.trim().replace(/[.*+?^${}()[\]\\]/g, "\\$&"); }).join("|") + ")", "i"); });
+    function hay(t) { return t._hay || (t._hay = [t.title, t.desc || "", (t.genres || []).map(function (g) { return S.GENRES[g] || ""; }).join(" "), S.vibes(t).join(" ")].join(" ")); }
+    var shown = {}; if (top) shown[top.id] = 1;
+    var titles = named.filter(function (t) { return !shown[t.id] && (shown[t.id] = 1); }).slice(0, 18);
+    var vibe = [];
+    if (pats.length || era) {
+      var need = pats.length;
+      var cand = S.ALL.filter(function (t) { return avail(t) && inEra(t) && !shown[t.id]; }).map(function (t) { var h2 = hay(t), n = pats.filter(function (p) { return p.test(h2); }).length; return { t: t, n: n }; });
+      var full = cand.filter(function (c) { return c.n === need; });
+      if (full.length < 8 && need > 1) full = full.concat(cand.filter(function (c) { return c.n >= Math.ceil(need / 2) && c.n < need; }));
+      vibe = full.sort(function (a, b) { return b.n - a.n || (Math.log(1 + (b.t.votes || 0)) + (b.t.imdb || 6) * 1.5) - (Math.log(1 + (a.t.votes || 0)) + (a.t.imdb || 6) * 1.5); })
+        .map(function (c) { return c.t; }).slice(0, 36);
+    }
+    // weather words use Vesper's hand-picked weather moods first (rainy, foggy, snowy, stormy…)
+    var WXW = { rain: "rain", rainy: "rain", gloomy: "rain", grey: "rain", gray: "rain", fog: "fog", foggy: "fog", mist: "fog", snow: "snow", snowy: "snow", winter: "snow",
+      storm: "storm", stormy: "storm", cold: "cold", noir: "city", gothic: "storm", vampire: "vamp", magic: "magic", mystery: "myst" };
+    var wk = keep.filter(function (w) { return WXW[w]; })[0];
+    if (wk) {
+      var others = pats.filter(function (_, k) { return toks[k] !== wk; });
+      var curated = S.wxRow(WXW[wk], 80).filter(function (t) { return avail(t) && inEra(t) && !shown[t.id] && others.every(function (p) { return p.test(hay(t)); }); });
+      var cs = {}; curated.forEach(function (t) { cs[t.id] = 1; });
+      vibe = curated.concat(vibe.filter(function (t) { return !cs[t.id]; })).slice(0, 36);
+    }
+    // 3) more like the top result
+    var similar = top ? S.similar(top, 20).filter(function (t) { return avail(t) && !shown[t.id]; }) : [];
+    var chips = byName.people.slice(0, 3).concat(byName.genres.slice(0, 2));
+    if (!era && rest) chips = chips.concat([rest + " 2000s", rest + " 2010s"]).slice(0, 6);
+    return { top: top, titles: titles, similar: similar, vibe: vibe, chips: chips, label: [rest, era ? (era[0] === era[1] ? era[0] : era[0] + "s") : ""].filter(Boolean).join(" · ") };
   }
 
   // ---------- My Vesper ----------
@@ -797,7 +855,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -907,7 +965,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v13 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v14 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
