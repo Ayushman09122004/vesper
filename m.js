@@ -497,13 +497,20 @@
   function tvGuide(t) {
     if (EPS[t.id]) return EPS[t.id];
     function nm(x) { return S.norm(x || ""); }
-    return (EPS[t.id] = fetch("https://api.tvmaze.com/search/shows?q=" + encodeURIComponent(t.title)).then(function (r) { return r.json(); }).then(function (res) {
-      var want = nm(t.title), y = t.year || 0;
-      var pick = res.map(function (x) { return x.show; }).filter(function (sh) {
-        var sy = sh.premiered ? +sh.premiered.slice(0, 4) : 0; return (nm(sh.name) === want || nm(sh.name).indexOf(want) === 0) && (!y || !sy || Math.abs(sy - y) <= 1); })[0]
-        || (res[0] && nm(res[0].show.name) === want ? res[0].show : null);
-      if (!pick) throw new Error("not found");
-      return fetch("https://api.tvmaze.com/shows/" + pick.id + "/episodes").then(function (r) { return r.json(); });
+    // exact match by IMDb code when we have it; otherwise by name and first-air year
+    var find = t.imdb_id
+      ? fetch("https://api.tvmaze.com/lookup/shows?imdb=" + t.imdb_id).then(function (r) { if (!r.ok) throw new Error("no imdb match"); return r.json(); })
+      : Promise.reject(new Error("no imdb"));
+    return (EPS[t.id] = find.catch(function () {
+      return fetch("https://api.tvmaze.com/search/shows?q=" + encodeURIComponent(t.title)).then(function (r) { return r.json(); }).then(function (res) {
+        var want = nm(t.title), y = t.year || 0;
+        var pick = res.map(function (x) { return x.show; }).filter(function (sh) {
+          var sy = sh.premiered ? +sh.premiered.slice(0, 4) : 0; return nm(sh.name) === want && (!y || !sy || Math.abs(sy - y) <= 1); })[0];
+        if (!pick) throw new Error("not found");
+        return pick;
+      });
+    }).then(function (show) {
+      return fetch("https://api.tvmaze.com/shows/" + show.id + "/episodes").then(function (r) { return r.json(); });
     }).then(function (list) {
       var by = {};
       list.forEach(function (e) { if (!e.season || e.number == null) return; (by[e.season] = by[e.season] || []).push({ n: e.number, title: e.name || "Episode " + e.number,
@@ -520,14 +527,14 @@
     box.innerHTML = '<div class="spin"></div>';
     tvGuide(t).then(function (ss) {
       if (curT !== t) return;
-      var s = ss.filter(function (x) { return x.n === sn; })[0] || ss[ss.length - 1 >= 0 && sn == null ? 0 : 0];
+      var s = ss.filter(function (x) { return x.n === sn; })[0] || ((t.genres || []).indexOf("rly") >= 0 ? ss[ss.length - 1] : ss[0]);   // reality shows open on the newest season
       box._ss = ss;
       box.innerHTML = '<div class="eptop"><button class="seasel" data-seasons>Season ' + s.n + (ss.length > 1 ? G.down : "") + "</button><small>" + s.eps.length + " episodes</small></div>";
       var el = h("div", "eps"); box.appendChild(el);
       s.eps.forEach(function (ep) {
         var e = h("div", "ep"); e._ep = ep;
-        e.innerHTML = '<div class="eh"><div class="eth">' + (ep.img ? '<img loading="lazy" decoding="async" src="' + esc(ep.img) + '" onload="this.classList.add(\'ok\')">' : '<img class="ok" loading="lazy" src="' + S.bd(t, "s640") + '">') +
-          "<span>" + G.play + '</span></div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + [ep.runtime ? ep.runtime + "m" : "", epDate(ep.date)].filter(Boolean).join(" · ") + "</small></div></div>" +
+        e.innerHTML = '<div class="eh"><div class="eth">' + (ep.img ? '<img loading="lazy" decoding="async" src="' + esc(ep.img) + '" onload="this.classList.add(\'ok\')">' : '<div class="noimg" style="--h:' + (S.glowHue(t) + ep.n * 23) % 360 + '"><b>' + ep.n + "</b><small>EPISODE</small></div>") +
+          (ep.img ? "<span>" + G.play + "</span>" : "") + '</div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + [ep.runtime ? ep.runtime + "m" : "", epDate(ep.date)].filter(Boolean).join(" · ") + "</small></div></div>" +
           (ep.desc ? "<p>" + esc(ep.desc) + "</p>" : "");
         el.appendChild(e);
       });
@@ -710,7 +717,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v10 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v11 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
