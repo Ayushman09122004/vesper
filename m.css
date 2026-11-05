@@ -427,3 +427,12 @@ button,.pc,.wide,.hero,.nh,.li{touch-action:manipulation;}
 .ptr svg{width:18px;height:18px;}
 .ptr.ready{background:#f4f4f7;color:#111;}
 .ptr span{display:inline-block;}
+/* episode guide */
+.eptop{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.eptop .seasel{margin:0;}
+.eptop small{color:var(--dim);font-size:13px;}
+.eth{width:150px;}
+.eth img{opacity:0;transition:opacity .35s;}
+.eth img.ok{opacity:1;}
+.ep .et small{font-size:12.5px;}
+.epnote{font-size:12px;color:var(--dim);text-align:center;padding:4px 0 10px;}

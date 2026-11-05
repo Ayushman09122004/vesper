@@ -486,38 +486,55 @@
     loadEpisodes(t, box);
   }
   function epApp(t) { return S.pickApp(t); }
+  // episode guide from TVmaze (free, works straight from the phone): numbers, titles, summaries, runtimes, air dates, pictures
+  var EPS = {};
+  function tvGuide(t) {
+    if (EPS[t.id]) return EPS[t.id];
+    function nm(x) { return S.norm(x || ""); }
+    return (EPS[t.id] = fetch("https://api.tvmaze.com/search/shows?q=" + encodeURIComponent(t.title)).then(function (r) { return r.json(); }).then(function (res) {
+      var want = nm(t.title), y = t.year || 0;
+      var pick = res.map(function (x) { return x.show; }).filter(function (sh) {
+        var sy = sh.premiered ? +sh.premiered.slice(0, 4) : 0; return (nm(sh.name) === want || nm(sh.name).indexOf(want) === 0) && (!y || !sy || Math.abs(sy - y) <= 1); })[0]
+        || (res[0] && nm(res[0].show.name) === want ? res[0].show : null);
+      if (!pick) throw new Error("not found");
+      return fetch("https://api.tvmaze.com/shows/" + pick.id + "/episodes").then(function (r) { return r.json(); });
+    }).then(function (list) {
+      var by = {};
+      list.forEach(function (e) { if (!e.season || e.number == null) return; (by[e.season] = by[e.season] || []).push({ n: e.number, title: e.name || "Episode " + e.number,
+        desc: (e.summary || "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim(), runtime: e.runtime, date: e.airdate,
+        img: e.image ? (e.image.original || e.image.medium) : null, links: {} }); });
+      var seasons = Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return { n: n, eps: by[n] }; });
+      if (!seasons.length) throw new Error("empty");
+      return seasons;
+    }).catch(function (e) { delete EPS[t.id]; throw e; }));
+  }
+  function epDate(d) { if (!d) return ""; var x = new Date(d + "T12:00:00"); return x > new Date() ? "Coming " + x.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
   function loadEpisodes(t, box, sn) {
     var app = epApp(t);
-    if (!window.vesperHasProxy) {
-      box.innerHTML = '<div class="note">' + (t.seasons ? esc(S.length(t)) + (t.eps ? " · " + t.eps + " episodes" : "") + ". " : "") +
-        "Tap <b>Play</b> and " + esc(LABEL[app] || "the app") + " opens right on this show — it remembers where you left off, so the next episode is one tap away.</div>";
-      return;
-    }
     box.innerHTML = '<div class="spin"></div>';
-    S.seasons(t).then(function (ss) {
+    tvGuide(t).then(function (ss) {
       if (curT !== t) return;
-      if (!ss.length) throw new Error("none");
-      var s = ss.filter(function (x) { return x.n === sn; })[0] || ss[0];
-      box.innerHTML = '<button class="seasel" data-seasons>' + esc(s.title && !/^season \d+$/i.test(s.title) ? s.title : "Season " + s.n) + (ss.length > 1 ? G.down : "") + '</button><div class="eps"><div class="spin"></div></div>';
+      var s = ss.filter(function (x) { return x.n === sn; })[0] || ss[ss.length - 1 >= 0 && sn == null ? 0 : 0];
       box._ss = ss;
-      return S.episodes(s).then(function (eps) {
-        if (curT !== t) return;
-        var el = box.querySelector(".eps"); el.textContent = "";
-        eps.forEach(function (ep) {
-          var e = h("div", "ep"); e._ep = ep;
-          e.innerHTML = '<div class="eh"><div class="eth"><img loading="lazy" src="' + S.bd(t, "s640") + '"><span>' + G.play + '</span></div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + (ep.runtime ? ep.runtime + "m" : "") + "</small></div></div><p>" + esc(ep.desc) + "</p>";
-          el.appendChild(e);
-        });
-        if (!eps.length) el.innerHTML = '<div class="note">No episode list for this season yet.</div>';
+      box.innerHTML = '<div class="eptop"><button class="seasel" data-seasons>Season ' + s.n + (ss.length > 1 ? G.down : "") + "</button><small>" + s.eps.length + " episodes</small></div>";
+      var el = h("div", "eps"); box.appendChild(el);
+      s.eps.forEach(function (ep) {
+        var e = h("div", "ep"); e._ep = ep;
+        e.innerHTML = '<div class="eh"><div class="eth">' + (ep.img ? '<img loading="lazy" decoding="async" src="' + esc(ep.img) + '" onload="this.classList.add(\'ok\')">' : '<img class="ok" loading="lazy" src="' + S.bd(t, "s640") + '">') +
+          "<span>" + G.play + '</span></div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + [ep.runtime ? ep.runtime + "m" : "", epDate(ep.date)].filter(Boolean).join(" · ") + "</small></div></div>" +
+          (ep.desc ? "<p>" + esc(ep.desc) + "</p>" : "");
+        el.appendChild(e);
       });
+      box.insertAdjacentHTML("beforeend", '<div class="epnote">Tap an episode to open ' + esc(LABEL[app] || "the app") + " — it picks up where you left off.</div>");
     }).catch(function () {
       if (curT !== t) return;
-      box.innerHTML = '<div class="note">Couldn\'t load the episode list right now. Tap <b>Play</b> to pick an episode inside ' + esc(LABEL[app] || "the app") + ".</div>";
+      box.innerHTML = '<div class="note">' + (t.seasons ? esc(S.length(t)) + (t.eps ? " · " + t.eps + " episodes" : "") + ". " : "") +
+        "No episode guide for this one yet — tap <b>Play</b> and " + esc(LABEL[app] || "the app") + " opens right on the show.</div>";
     });
   }
   function seasonsSheet(box) {
     var ss = box._ss || []; if (ss.length < 2) return;
-    sheet("<h3>Seasons</h3>" + ss.map(function (s) { return '<button class="opt" data-season="' + s.n + '"><span>' + esc(s.title && !/^season \d+$/i.test(s.title) ? s.title : "Season " + s.n) + "</span></button>"; }).join(""));
+    sheet("<h3>Seasons</h3>" + ss.map(function (s) { return '<button class="opt" data-season="' + s.n + '"><span>Season ' + s.n + "</span><small>" + s.eps.length + " episodes</small></button>"; }).join(""));
   }
   function playEp(t, ep) {
     var app = epApp(t); if (!app) return;
