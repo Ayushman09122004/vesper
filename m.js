@@ -556,6 +556,8 @@
       if (!q) {
         var rec = S.list("queries").slice(0, 8);
         chips.innerHTML = rec.map(function (r) { return '<button class="chip" data-q="' + esc(r) + '">' + esc(r) + "</button>"; }).join("");
+        var seenIds = S.list("viewed").slice(0, 16), seen = S.ids(seenIds).filter(function (x) { return (x.avail || []).length; });
+        if (seen.length >= 2) { var rv = rowEl(S.R("Recently Viewed", seen, null, null, 1, true)); body.appendChild(rv); rv._fill(); }
         var quick = h("div", "quick");
         quick.innerHTML = "<h4>Try a vibe</h4>" + ["new york", "college", "heist", "road trip", "small town", "detective", "wedding", "time travel"].map(function (v) { return '<button class="chip" data-q="' + v + '">' + v + "</button>"; }).join("") +
           "<h4>Throwback</h4>" + ERAS.map(function (e) { return '<button class="chip era" data-era="' + e.k + '">' + e.label + " American films</button>"; }).join("");
@@ -1216,7 +1218,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v18 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v19 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
