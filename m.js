@@ -691,6 +691,15 @@
       if (pull > 120) { ind.classList.remove("ready"); buzz(); if (S.reseed) S.reseed(); noted = false; show("home", sec); toast("Fresh picks for you"); } pull = 0; });
   })();
 
+  // fill the whole screen: measure the strip iOS leaves out at the bottom of home-screen apps
+  function fitScreen() {
+    var standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+    var tall = Math.max(screen.height, screen.width), portrait = innerHeight > innerWidth;
+    var gap = standalone && portrait ? Math.max(0, Math.min(80, tall - innerHeight)) : 0;
+    document.documentElement.style.setProperty("--gap", gap + "px");
+  }
+  fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
+
   // ---------- start ----------
   $("view").addEventListener("scroll", onScroll, { passive: true });
   function fetchCatalog() { return fetch("catalog.json?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }

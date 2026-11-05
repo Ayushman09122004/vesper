@@ -436,3 +436,14 @@ button,.pc,.wide,.hero,.nh,.li{touch-action:manipulation;}
 .eth img.ok{opacity:1;}
 .ep .et small{font-size:12.5px;}
 .epnote{font-size:12px;color:var(--dim);text-align:center;padding:4px 0 10px;}
+
+/* ===== full-screen fix: iOS home-screen apps with a see-through status bar get a page that's shorter than the screen.
+   m.js measures the missing strip (--gap) and every full-screen layer stretches over it. ===== */
+:root{--gap:0px;}
+html,body{height:calc(100% + var(--gap));}
+#view,#detail,#sheet,#boot,#who,.trl{bottom:calc(-1 * var(--gap));}
+#amb{height:calc(92vh + var(--gap));}
+#tabs{bottom:calc(var(--sb) * .5 + 4px - var(--gap));}
+#toast{bottom:calc(var(--sb) + 92px - var(--gap));}
+.coach{bottom:calc(var(--sb) + 90px - var(--gap));}
+.tacts{bottom:calc(var(--sb) + 20px - var(--gap));}
