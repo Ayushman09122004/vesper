@@ -216,4 +216,6 @@
   };
   V.tonightsPick = function () { return V.tonightsThree()[0] || V.surprisePick(); };
   V.SEED = SEED;
+  // a brand-new shuffle without restarting (pull to refresh on iPhone)
+  V.reseed = function () { SEED = Math.random(); V.SEED = SEED; TRIO = null; SHOWN_LAST = null; };
 })(window);

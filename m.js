@@ -67,9 +67,9 @@
   function poster(t) {
     var c = h("div", "pc"); c.dataset.id = t.id;
     var src = S.po(t, "s592"), lg = t.orig ? '<img class="lg" src="' + LOGO[t.orig] + '">' : "";
-    c.innerHTML = (src ? '<img class="p" loading="lazy" decoding="async" src="' + src + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' : "") +
+    c.innerHTML = (src ? '<img class="p" loading="lazy" decoding="async" src="' + src + '" onload="this.classList.add(\'ok\')" onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace(\'/s592/\',\'/s332/\')}else{this.remove()}">' : "") +
       '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t);
-    if (src) { var im = c.querySelector("img.p"); im.addEventListener("error", function () { c.querySelector(".nt").style.opacity = 1; }); }
+    if (src) { var im = c.querySelector("img.p"); im.addEventListener("error", function () { if (im.dataset.f === "1" && !im.isConnected) c.querySelector(".nt").style.opacity = 1; setTimeout(function () { if (!im.isConnected) c.querySelector(".nt").style.opacity = 1; }, 50); }); }
     return c;
   }
   function topCard(t, i) { var c = h("div", "tc"); c.innerHTML = '<div class="num">' + (i + 1) + "</div>"; var p = poster(t); p.querySelector(".t10b") && p.querySelector(".t10b").remove(); c.appendChild(p); return c; }
@@ -103,7 +103,8 @@
   function addRows(box, rows) {
     if (io) io.disconnect();
     io = new IntersectionObserver(function (en) { en.forEach(function (e) { if (e.isIntersecting) { e.target._fill(); io.unobserve(e.target); } }); }, { root: $("view"), rootMargin: "600px 0px" });
-    rows.forEach(function (r, i) { var el = rowEl(r); box.appendChild(el); if (i < 3) el._fill(); else io.observe(el); });
+    rows.forEach(function (r, i) { var el = rowEl(r), f = el._fill; el._fill = function () { try { f(); } catch (e) { console.error(e); el.remove(); } };   // one bad row never breaks the page
+      box.appendChild(el); if (i < 3) el._fill(); else io.observe(el); });
   }
   function gridOf(list) { var g = h("div", "grid"); list.forEach(function (t) { g.appendChild(poster(t)); }); return g; }
 
@@ -164,7 +165,13 @@
       ["mylist", "My Vesper", p ? S.avatar(p) : G.list]];
     $("tabs").innerHTML = T.map(function (x) { return '<button data-tab="' + x[0] + '" class="' + (x[0] === tab ? "on" : "") + '">' + x[2] + "<span>" + x[1] + "</span></button>"; }).join("");
   }
-  function onScroll() { var y = $("view").scrollTop; $("top").classList.toggle("solid", y > 30); $("amb").style.opacity = Math.max(0, 1 - y / 700); }
+  var lastY = 0;
+  function onScroll() {
+    var y = $("view").scrollTop, top = $("top");
+    top.classList.toggle("solid", y > 30); $("amb").style.opacity = Math.max(0, 1 - y / 700);
+    if (y > 160 && y > lastY + 4) top.classList.add("tuck"); else if (y < lastY - 6 || y < 120) top.classList.remove("tuck");
+    lastY = y;
+  }
 
   // ---------- navigation ----------
   function show(t, s, a, keepY) {
@@ -193,22 +200,41 @@
     if ((t.imdb || 0) >= 8.2 && w.length < 3) w.push("Critically Acclaimed");
     return w.slice(0, 3);
   }
-  function heroEl(s) {
-    var hid = S.hiddenSet(), list = S.heroFor(s).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
-    var t;
-    if (s === "home") { var last = S.list("lastHero")[0], k = list.findIndex(function (x) { return x.id === last; }); t = list[(k + 1) % list.length]; S.set("lastHero", [t.id]); }
-    else t = list[Math.floor(Math.random() * Math.min(list.length, 5))];
-    var wn = S.wxNow(), arr = S.arrivalOf(t);
-    var kicker = s === "home" && wn && S.wxRow(wn.k, 30).indexOf(t) >= 0 ? wn.hero : arr ? (arr.season > 1 ? "New Season" : "Just Added") : rankOf(t);
-    var el = h("section", "hero"); el.dataset.id = t.id; el.style.setProperty("--gh", S.glowHue(t));
+  var heroTimer = null;
+  function slide(t, s, wn) {
+    var arr = S.arrivalOf(t), kicker = s === "home" && wn && S.wxRow(wn.k, 30).indexOf(t) >= 0 ? wn.hero : arr ? (arr.season > 1 ? "New Season" : "Just Added") : rankOf(t);
+    var el = h("section", "hero"); el.dataset.id = t.id;
     var inL = S.inList("mylist", t.id), a = t.orig || S.pickApp(t);
     el.innerHTML = '<img class="p" decoding="async" src="' + S.po(t, "s718") + '" onload="this.classList.add(\'ok\')"><div class="sh"></div>' +
       (a ? '<img class="svc" src="' + LOGO[a] + '">' : "") + '<div class="inf">' +
       (kicker ? '<div class="kick">' + esc(kicker) + "</div>" : "") + '<div class="nm">' + esc(t.title) + '</div><div class="line">' +
       genreWords(t).map(esc).join('<i class="dot"></i>') + "</div>" +
       '<div class="btns"><button class="btn play" data-play="' + t.id + '">' + G.play + (S.pickApp(t) ? "Play" : "Soon") + '</button><button class="btn ghost" data-list="' + t.id + '">' + (inL ? G.check : G.plus) + "My List</button></div></div>";
-    setAmb(t);
     return el;
+  }
+  // a swipeable billboard: six picks, the page glow follows the one you're looking at
+  function heroEl(s) {
+    var hid = S.hiddenSet(), list = S.heroFor(s).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
+    if (s === "home") { var last = S.list("lastHero")[0], k = list.findIndex(function (x) { return x.id === last; }); list = list.slice(k + 1).concat(list.slice(0, k + 1)); S.set("lastHero", [list[0].id]); }
+    else list = list.slice().sort(function () { return Math.random() - 0.5; });
+    list = list.slice(0, 6);
+    var wn = S.wxNow(), box = h("div", "heros"), track = h("div", "htrack"), dots = h("div", "hdots");
+    list.forEach(function (t) { track.appendChild(slide(t, s, wn)); });
+    dots.innerHTML = list.map(function (_, i) { return "<i" + (i ? "" : ' class="on"') + "></i>"; }).join("");
+    box.appendChild(track); if (list.length > 1) box.appendChild(dots);
+    var cur = 0, touching = false;
+    function at() { return Math.round(track.scrollLeft / (track.firstChild.offsetWidth + 12)); }
+    track.addEventListener("scroll", function () { var i = at(); if (i !== cur && list[i]) { cur = i; setAmb(list[i]); [].forEach.call(dots.children, function (d, j) { d.classList.toggle("on", j === i); }); buzz(); } }, { passive: true });
+    track.addEventListener("touchstart", function () { touching = true; }, { passive: true });
+    track.addEventListener("touchend", function () { touching = false; }, { passive: true });
+    clearInterval(heroTimer);
+    heroTimer = setInterval(function () {
+      if (!box.isConnected) return clearInterval(heroTimer);
+      if (touching || document.hidden || $("detail").classList.contains("on") || $("view").scrollTop > 200) return;
+      var n = (cur + 1) % list.length; track.scrollTo({ left: n * (track.firstChild.offsetWidth + 12), behavior: "smooth" });
+    }, 9000);
+    setAmb(list[0]);
+    return box;
   }
   function renderSection(page, s) {
     var rows = S.finalize((S.SECTIONS[s] || S.SECTIONS.home)());
@@ -232,12 +258,14 @@
     list.forEach(function (t, i) {
       var soon = S.soonOf(t), arr = S.arrivalOf(t), d = soon ? new Date(soon.date + "T12:00:00") : null, a = t.orig || S.pickApp(t) || (soon && soon.app);
       var left = m === "soon" && d ? "<small>" + d.toLocaleDateString("en-GB", { month: "short" }).toUpperCase() + "</small><b>" + d.getDate() + "</b>" : m === "shows" || m === "movies" ? "<b>" + (i + 1) + "</b>" : "<small>NEW</small>";
-      var when = m === "soon" && d ? "Coming " + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + (a ? " · " + LABEL[a] : "")
+      var days = d ? Math.round((d - new Date(new Date().toDateString())) / 864e5) : null;
+      var when = m === "soon" && d ? (days <= 0 ? "Out today" : days === 1 ? "Tomorrow" : days < 7 ? "In " + days + " days · " + d.toLocaleDateString("en-GB", { weekday: "long" }) : "Coming " + d.toLocaleDateString("en-GB", { day: "numeric", month: "long" })) + (a ? " · " + LABEL[a] : "")
         : arr ? (arr.season > 1 ? "New season · " : "Now streaming · ") + (LABEL[arr.app] || "") : a ? "On " + LABEL[a] : "";
       var el = h("div", "nh"); el.dataset.id = t.id;
       el.innerHTML = '<div class="dt">' + left + '</div><div class="bd"><div class="art"><img loading="lazy" decoding="async" src="' + S.bd(t, "s1440") + '">' + (a && LOGO[a] ? '<img class="lg" src="' + LOGO[a] + '">' : "") +
         '<span class="pb" data-trailer="' + t.id + '">' + G.play + '</span></div><div class="nhb"><button data-trailer="' + t.id + '">' + G.film + "Trailer</button>" +
-        '<button data-list="' + t.id + '">' + (S.inList("mylist", t.id) ? G.check : G.plus) + "My List</button></div>" + '<div class="nm">' + esc(t.title) + '</div><div class="when">' + esc(when) + "</div><p>" + esc(t.desc || "") + '</p><div class="gn">' + (t.genres || []).slice(0, 3).map(function (g) { return S.GENRES[g] || g; }).join(" · ") + "</div></div>";
+        (m === "soon" ? '<button data-list="' + t.id + '" data-remind="1">' + (S.inList("mylist", t.id) ? G.check + "Reminded" : G.bell + "Remind Me") + "</button>"
+          : '<button data-list="' + t.id + '">' + (S.inList("mylist", t.id) ? G.check : G.plus) + "My List</button>") + "</div>" + '<div class="nm">' + esc(t.title) + '</div><div class="when">' + esc(when) + "</div><p>" + esc(t.desc || "") + '</p><div class="gn">' + (t.genres || []).slice(0, 3).map(function (g) { return S.GENRES[g] || g; }).join(" · ") + "</div></div>";
       page.appendChild(el);
     });
   }
@@ -412,6 +440,7 @@
 
   // ---------- details ----------
   var curT = null;
+  var fromRect = null;
   function openDetail(id) {
     var t = S.T[id]; if (!t) return; curT = t; S.markViewed(t.id); buzz();
     var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t), rank = rankOf(t), arr = S.arrivalOf(t);
@@ -429,7 +458,10 @@
       '<div class="credits">' + (cast.length ? '<div class="cl">Cast: ' + cast.slice(0, 3).map(esc).join(", ") + (cast.length > 3 ? '<span class="more" data-more> … more</span><span class="rest">, ' + cast.slice(3).map(esc).join(", ") + "</span>" : "") + "</div>" : "") +
       (dirs.length ? "<div>" + (t.type === "SHOW" ? "Creator: " : "Director: ") + dirs.map(esc).join(", ") + "</div>" : "") + "</div>" + actsHTML(t) +
       '<div class="dtabs">' + (t.type === "SHOW" ? '<button class="on" data-dt="eps">Episodes</button>' : "") + '<button' + (t.type === "SHOW" ? "" : ' class="on"') + ' data-dt="more">More Like This</button></div><div class="dsect"></div></div>';
-    d.scrollTop = 0; d.classList.add("on");
+    d.scrollTop = 0;
+    if (fromRect) { d.style.transformOrigin = (fromRect.left + fromRect.width / 2) + "px " + (fromRect.top + fromRect.height / 2) + "px"; } else d.style.transformOrigin = "50% 80%";
+    fromRect = null;
+    requestAnimationFrame(function () { d.classList.add("on"); });
     history.pushState({ d: 1 }, "");
     dtab(t.type === "SHOW" ? "eps" : "more");
     startPreview(t);
@@ -567,6 +599,7 @@
     if (D.all) { var AL = { recent: "Continue Watching", mylist: "My List", likes: "Liked", dislikes: "Not for Me" }; var items = S.ids(S.list(D.all));
       return sheet("<h3>" + AL[D.all] + "</h3>", function (card) { card.appendChild(gridOf(items)); }); }
     if (inSheet && (D.list || D.like || D.dislike)) setTimeout(function () { closeSheet(); if (D.dislike && tab !== "search") rerender(); }, 120);
+    if (D.remind) { var r = S.toggle("mylist", D.list, true); buzz(); toast(r ? "We'll keep it at the top of My List" : "Reminder removed"); el.innerHTML = r ? G.check + "Reminded" : G.bell + "Remind Me"; return; }
     if (D.list) { var on = S.toggle("mylist", D.list, true); buzz(); toast(on ? "Added to My List" : "Removed from My List");
       if (el.closest(".hero,.nhb")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); if (tab === "mylist" && !curT) rerender(); return; }
     if (D.like) { var l = S.like(D.like); buzz(); toast(l ? "Got it — more like this" : "Like removed"); refreshActs(); return; }
@@ -596,7 +629,7 @@
     if (D.fav) { setPref("app", D.fav); closeSheet(); toast(D.fav === "auto" ? "Playing on the best available app" : "Playing on " + LABEL[D.fav] + " first"); return rerender(); }
     if (D.clear != null) { if (el._sure) { S.clearHistory(); closeSheet(); toast("History cleared"); return rerender(); } el._sure = 1; el.querySelector("span").textContent = "Tap again to forget"; return; }
     var id = D.id || (el.closest("[data-id]") || {}).dataset && el.closest("[data-id]").dataset.id;
-    if (id) { closeSheet(); openDetail(id); }
+    if (id) { var src = el.closest(".pc,.wide,.hero,.nh .art,.li") || el; fromRect = src.getBoundingClientRect(); closeSheet(); openDetail(id); }
   });
   window.addEventListener("popstate", function () { closeDetail(true); });
 
@@ -631,6 +664,16 @@
     d.addEventListener("touchend", function (e) { if (y0 == null) return; var dy = e.changedTouches[0].clientY - y0; d.style.transition = ""; d.style.transform = ""; y0 = null; if (dy > 120) closeDetail(); });
   })();
 
+  // pull down at the top of Home for a fresh set of picks
+  (function () {
+    var v = $("view"), y0 = null, pull = 0, ind = h("div", "ptr", G.dice + "<span>Pull for fresh picks</span>"); document.body.appendChild(ind);
+    v.addEventListener("touchstart", function (e) { y0 = tab === "home" && v.scrollTop <= 0 ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
+    v.addEventListener("touchmove", function (e) { if (y0 == null) return; pull = Math.max(0, e.touches[0].clientY - y0);
+      if (pull > 10) { ind.classList.add("on"); ind.style.transform = "translate(-50%," + Math.min(pull * 0.5, 70) + "px) rotate(" + pull * 2 + "deg)"; ind.classList.toggle("ready", pull > 120); } }, { passive: true });
+    v.addEventListener("touchend", function () { if (y0 == null) return; y0 = null; ind.style.transform = ""; ind.classList.remove("on");
+      if (pull > 120) { ind.classList.remove("ready"); buzz(); if (S.reseed) S.reseed(); noted = false; show("home", sec); toast("Fresh picks for you"); } pull = 0; });
+  })();
+
   // ---------- start ----------
   $("view").addEventListener("scroll", onScroll, { passive: true });
   function fetchCatalog() { return fetch("catalog.json?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
@@ -647,7 +690,8 @@
     var c = h("div", "coach", '<img src="icons/icon-180.png"><div><b>Put Vesper on your Home Screen</b>Tap <span class="sh">' + G.share + '</span> below, then <b>Add to Home Screen</b>.</div><button>' + G.x + "</button>");
     document.body.appendChild(c); c.querySelector("button").onclick = function () { c.remove(); };
   }, 1500);
-  fetchCatalog().then(start).catch(function () {
+  fetchCatalog().then(start).catch(function (e) {
+    if (e && e.stack) { console.error(e); try { localStorage.setItem("vesper.lastError", String(e.stack).slice(0, 500)); } catch (x) {} }
     $("boot").innerHTML = '<div class="empty"><b>Can\'t reach Vesper</b>Check your connection and open it again.</div>';
   });
   // came back after a while: refresh the list quietly
