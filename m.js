@@ -34,6 +34,9 @@
     film: I('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/>'),
     muted: I('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
     sound: I('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>'),
+    clock: I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+    heart: I('<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>'),
+    people: I('<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c.7-3.2 3-4.8 6-4.8s5.3 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.8c2.4.2 4 1.6 4.5 4.2"/>'),
     menu: I('<path d="M4 7h16M4 12h16M4 17h16"/>', 2),
     person: I('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.9-3.6 3.6-5.4 7-5.4s6.1 1.8 7 5.4"/>'),
     send: I('<path d="M21 3.5L10.5 13.5M21 3.5l-6.5 17-4-7-7-4z"/>'),
@@ -52,7 +55,7 @@
   function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); else hapEl.click(); } catch (e) {} }
 
   var SECT_NAMES = { home: "Home", shows: "Series", movies: "Films", collections: "Collections", anime: "Anime", korean: "Korean", english: "Hollywood", uk: "British",
-    indian: "Indian", world: "World Cinema", throwback: "Throwback", weather: "Weather", "new": "New & Hot", mylist: "My List" };
+    indian: "Indian", world: "World Cinema", throwback: "Throwback", time: "Fits Your Time", weather: "Weather", "new": "New & Hot", mylist: "My List" };
   S.APPS.forEach(function (a) { SECT_NAMES["app:" + a] = LABEL[a]; });
   var CATS = [["throwback", "Throwback 2005–19"], ["collections", "Collections"], ["anime", "Anime"], ["korean", "Korean"], ["english", "Hollywood"], ["uk", "British"], ["indian", "Indian"], ["world", "World Cinema"]];
 
@@ -139,10 +142,10 @@
     if (tab === "home") {
       var inSec = sec !== "home";
       var chips = inSec
-        ? '<button class="chip x" data-go="home">' + G.x + '</button><button class="chip on" data-sheet="' + (sec.indexOf("app:") === 0 ? "apps" : CATS.some(function (c) { return c[0] === sec; }) ? "cats" : "") + '">' +
-          (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : "") + esc(SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.caret) + "</button>" +
+        ? '<button class="chip x" data-go="home">' + G.x + '</button><button class="chip on" data-sheet="' + (sec === "time" ? "time" : sec.indexOf("app:") === 0 ? "apps" : CATS.some(function (c) { return c[0] === sec; }) ? "cats" : "") + '">' +
+          (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : sec === "time" ? G.clock : "") + esc(sec === "time" ? tLabel(S.pref("tmax", 60)) : SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.caret) + "</button>" +
           (sec === "shows" ? '<button class="chip" data-go="movies">Films</button>' : sec === "movies" ? '<button class="chip" data-go="shows">Series</button>' : "")
-        : '<button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-go="throwback">Throwback</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
+        : '<button class="chip" data-sheet="time">' + G.clock + 'Time</button><button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-go="throwback">Throwback</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
       var title = inSec ? esc(SECT_NAMES[sec] || "") : p ? "For " + esc(p.name) : "Home";
       top.innerHTML = '<div class="hrow"><img class="logo" src="icons/icon-180.png" alt=""><h1>' + title + "</h1>" +
         '<button class="hbtn" data-pick title="Pick for me">' + G.dice + '</button><button class="hbtn" data-tab="search">' + G.search + "</button></div><div class=\"chips\">" + chips + "</div>";
@@ -250,6 +253,8 @@
     if (s === "throwback") page.appendChild(eraBar());
     if (s === "home") { var tz = S.finalize([throwbackTeaser()]); if (tz.length) rows.splice(Math.min(6, rows.length), 0, tz[0]); }
     var hero = heroEl(s); if (hero) page.appendChild(hero); else setAmb(null);
+    if (s === "home" && S.list("likes").length + S.list("dislikes").length < 6 && !(S.state[qrKey()] || []).length)
+      page.appendChild(h("button", "qrprompt", G.heart + "<span><b>Teach Vesper your taste</b><small>Swipe through 20 posters — takes a minute</small></span>" + G.r)).dataset.qr = "1";
     if (!rows.length) page.appendChild(h("div", "empty", "<b>Nothing here yet</b>The show list is still loading."));
     addRows(page, rows);
   }
@@ -306,6 +311,100 @@
     var items = famous(P).slice(0, 24).filter(function (t) { return !hid[t.id]; });
     var r = S.R("Throwback · " + e.label, items.sort(function () { return Math.random() - 0.5; }), null, "American films you forgot you loved");
     r.more = e.k; return r;
+  }
+
+  // ---------- "I have…" — only what fits the time you've got ----------
+  var TIMES = [[30, "30 min"], [60, "1 hour"], [90, "1½ hours"], [120, "2 hours"], [180, "A whole evening"]];
+  function tLabel(m) { return (TIMES.filter(function (x) { return x[0] === m; })[0] || [0, m + " min"])[1]; }
+  S.SECTIONS.time = function () {
+    var m = S.pref("tmax", 60), R = S.R, Q = S._.byQ, hid = S.hiddenSet();
+    var ok = S.ALL.filter(function (t) { return (t.avail || []).length && !hid[t.id] && t.runtime; });
+    var films = ok.filter(function (t) { return t.type === "MOVIE" && t.runtime <= m && t.runtime >= Math.min(70, m - 20); });
+    var eps = ok.filter(function (t) { return t.type === "SHOW" && t.runtime <= Math.min(m, 65) && t.runtime >= (m <= 30 ? 15 : 25); });
+    var g = function (l, x) { return l.filter(function (t) { return (t.genres || []).indexOf(x) >= 0; }); };
+    var rows = [];
+    if (m >= 80) rows.push(R("Films That Fit", Q(films), null, "all " + (m >= 180 ? "evening-length" : "under " + tLabel(m).toLowerCase())));
+    rows.push(R(m <= 30 ? "One Episode, Done" : "Shows to Start Tonight", Q(eps), null, "episodes under " + Math.min(m, 65) + " minutes"));
+    rows.push(R("Quick Laughs", Q(g(eps, "cmy").concat(g(films, "cmy"))), null), R("Edge of Your Seat", Q(g(films, "trl").concat(g(eps, "trl"), g(eps, "crm"))), null),
+      R("Feel Something", Q(g(films, "drm").concat(g(eps, "drm"))), null), R("Anime Episodes", Q(g(eps, "ani")), null, "around 24 minutes each"),
+      R("Romance", Q(g(films, "rma").concat(g(eps, "rma"))), null), R("Real Stories", Q(g(films, "doc").concat(g(eps, "doc"))), null));
+    if (m >= 120) rows.push(R("Worth Every Minute", Q(films.filter(function (t) { return (t.imdb || 0) >= 8; })), null, "8+ on IMDb"));
+    return rows;
+  };
+  function timeSheet() {
+    var cur = S.pref("tmax", 60);
+    sheet("<h3>How much time do you have?</h3>" + TIMES.map(function (x) { return '<button class="opt' + (x[0] === cur && sec === "time" ? " on" : "") + '" data-tmax="' + x[0] + '">' + G.clock + "<span>" + x[1] + "</span></button>"; }).join(""));
+  }
+
+  // ---------- Quick Rate: swipe through posters to teach Vesper your taste ----------
+  function qrKey() { return "rated" + (S.state.profile ? "@" + S.state.profile : ""); }
+  function quickRate() {
+    var done = {}; ["likes", "dislikes", "mylist", "watched"].forEach(function (k) { S.list(k).forEach(function (id) { done[id] = 1; }); });
+    (S.state[qrKey()] || []).forEach(function (id) { done[id] = 1; });
+    var pool = S.ALL.filter(function (t) { return !done[t.id] && t.poster && (t.votes || 0) > 40000 && (t.avail || []).length; })
+      .sort(function (a, b) { return (b.votes || 0) - (a.votes || 0); }).slice(0, 160).sort(function () { return Math.random() - 0.5; }).slice(0, 20);
+    if (!pool.length) { toast("You've rated everything — nice"); return; }
+    var o = h("div", "qr"); o.id = "qr"; document.body.appendChild(o);
+    var i = 0, liked = 0, rated = [];
+    o.innerHTML = '<div class="qtop"><button data-qclose>' + G.x + '</button><div class="qprog"></div><b class="qcount"></b></div><div class="qstack"></div>' +
+      '<div class="qhint">Swipe right if you liked it · left if not for you · up to save</div>' +
+      '<div class="qbtns"><button class="no" data-qa="no">' + G.x + '</button><button class="sk" data-qa="skip">Haven\'t seen</button><button class="sv" data-qa="save">' + G.plus + '</button><button class="yes" data-qa="yes">' + G.heart + "</button></div>";
+    var stack = o.querySelector(".qstack");
+    function card(t) { var c = h("div", "qcard"); c.innerHTML = '<img src="' + S.po(t, "s718") + '"><div class="qsh"></div><div class="qinf"><b>' + esc(t.title) + "</b><small>" + [t.year, genreWords(t).slice(0, 2).join(" · ")].filter(Boolean).join(" · ") +
+      '</small></div><div class="qstamp yes">LIKED</div><div class="qstamp no">NOPE</div><div class="qstamp save">SAVED</div>'; return c; }
+    function paint() {
+      stack.textContent = "";
+      o.querySelector(".qprog").innerHTML = pool.map(function (_, j) { return "<i" + (j < i ? ' class="d"' : j === i ? ' class="c"' : "") + "></i>"; }).join("");
+      o.querySelector(".qcount").textContent = Math.min(i + 1, pool.length) + "/" + pool.length;
+      if (i >= pool.length) return finish();
+      if (pool[i + 1]) { var b = card(pool[i + 1]); b.classList.add("under"); stack.appendChild(b); }
+      var c = card(pool[i]); stack.appendChild(c); drag(c);
+    }
+    function act(kind, c) {
+      var t = pool[i]; if (!t) return; buzz();
+      if (kind === "yes") { S.like(t.id); liked++; } else if (kind === "no") S.dislike(t.id); else if (kind === "save") S.toggle("mylist", t.id, true);
+      rated.push(t.id); S.setRaw(qrKey(), (S.state[qrKey()] || []).concat([t.id]).slice(-600));
+      c = c || stack.lastChild; c.classList.add("go-" + kind);
+      i++; setTimeout(paint, 260);
+    }
+    function drag(c) {
+      var x0 = 0, y0 = 0, dx = 0, dy = 0, on = false;
+      c.addEventListener("touchstart", function (e) { on = true; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; c.style.transition = "none"; }, { passive: true });
+      c.addEventListener("touchmove", function (e) { if (!on) return; dx = e.touches[0].clientX - x0; dy = e.touches[0].clientY - y0;
+        c.style.transform = "translate(" + dx + "px," + dy + "px) rotate(" + dx / 18 + "deg)";
+        c.classList.toggle("s-yes", dx > 60); c.classList.toggle("s-no", dx < -60); c.classList.toggle("s-save", dy < -80 && Math.abs(dx) < 60); }, { passive: true });
+      c.addEventListener("touchend", function () { on = false; c.style.transition = "";
+        if (dx > 100) { c.style.transform = ""; act("yes", c); } else if (dx < -100) { c.style.transform = ""; act("no", c); } else if (dy < -120) { c.style.transform = ""; act("save", c); }
+        else { c.style.transform = ""; c.classList.remove("s-yes", "s-no", "s-save"); } dx = dy = 0; });
+    }
+    function finish() {
+      stack.innerHTML = '<div class="qdone">' + G.heart + "<b>Your picks just got sharper</b><small>You rated " + rated.length + " titles" + (liked ? " and liked " + liked : "") + ". Home now leans your way.</small>" +
+        '<button class="btn play" data-qhome>See my picks</button></div>';
+      o.querySelector(".qbtns").style.visibility = "hidden"; o.querySelector(".qhint").style.visibility = "hidden";
+    }
+    o.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-qa],[data-qclose],[data-qhome]"); if (!b) return; e.stopPropagation();
+      if (b.dataset.qa) { if (b.dataset.qa === "skip") { buzz(); rated.push(pool[i].id); S.setRaw(qrKey(), (S.state[qrKey()] || []).concat([pool[i].id]).slice(-600)); stack.lastChild.classList.add("go-skip"); i++; setTimeout(paint, 220); } else act(b.dataset.qa); return; }
+      o.classList.remove("on"); setTimeout(function () { o.remove(); }, 300);
+      if (rated.length) { if (S.reseed) S.reseed(); noted = false; show(tab === "home" ? "home" : tab, tab === "home" ? "home" : sec); }
+    });
+    requestAnimationFrame(function () { o.classList.add("on"); }); paint();
+  }
+
+  // ---------- Watch together: what two people will both enjoy ----------
+  function togetherSheet() {
+    var me = S.profile(), others = S.profiles().filter(function (p) { return !me || p.id !== me.id; });
+    if (!me || !others.length) { sheet('<h3>Watch together</h3><div class="sub-h" style="padding:0 20px 14px">Add a second person and Vesper will find what you\'ll both enjoy.</div><button class="opt" data-padd>' + S.avatar(null) + "<span>Add a person</span></button>"); return; }
+    sheet("<h3>Watch with…</h3>" + others.map(function (p) { return '<button class="opt" data-tpart="' + p.id + '">' + S.avatar(p) + "<span>" + esc(p.name) + "</span></button>"; }).join(""));
+  }
+  function togetherPicks(pid) {
+    var me = S.state.profile, Ta = S.taste(); S.state.profile = pid; var Tb = S.taste(), hb = S.hiddenSet(); S.state.profile = me; var ha = S.hiddenSet();
+    var other = S.profiles().filter(function (p) { return p.id === pid; })[0];
+    var pick = S.ALL.filter(function (t) { return (t.avail || []).length && !ha[t.id] && !hb[t.id] && (t.imdb || 0) >= 6.8 && (t.votes || 0) > 8000; })
+      .map(function (t) { var a = S.tasteScore(t, Ta), b = S.tasteScore(t, Tb); return { t: t, s: a + b - Math.abs(a - b) * 0.7 }; })
+      .sort(function (x, y) { return y.s - x.s; }).slice(0, 36).map(function (x) { return x.t; });
+    closeSheet();
+    setTimeout(function () { sheet('<h3>You & ' + esc(other ? other.name : "them") + '</h3><div class="sub-h" style="padding:0 20px 14px">Picked for both of your tastes — nothing either of you said no to.</div>', function (card) { card.appendChild(gridOf(pick)); }); }, 300);
   }
 
   // ---------- New & Hot ----------
@@ -433,7 +532,9 @@
     var opts = h("div", "mlist");
     opts.innerHTML = '<button class="mrow" data-sheet="place"><i style="--c:#3b82f6">' + G.weather + "</i><span>Weather mood<small>" + (L ? esc(S.wxWords(L.code)) + " · " + Math.round(L.temp) + "° in " : "From ") + esc(S.place().name) + "</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-sheet="me"><i style="--c:#e50914">' + G.play + "</i><span>Play on first<small>" + (fav === "auto" ? "Best available app" : LABEL[fav]) + "</small></span>" + G.r + "</button>" +
-      '<button class="mrow" data-sheet="people"><i style="--c:#8f7cff">' + G.person + "</i><span>Profiles<small>" + (many ? S.profiles().length + " people" : "Add family members") + "</small></span>" + G.r + "</button>";
+      '<button class="mrow" data-sheet="people"><i style="--c:#8f7cff">' + G.person + "</i><span>Profiles<small>" + (many ? S.profiles().length + " people" : "Add family members") + "</small></span>" + G.r + "</button>" +
+      '<button class="mrow" data-qr><i style="--c:#f3a46b">' + G.heart + "</i><span>Quick Rate<small>Swipe 20 posters, sharpen your picks</small></span>" + G.r + "</button>" +
+      '<button class="mrow" data-together><i style="--c:#22a06b">' + G.people + "</i><span>Watch together<small>What you'll both enjoy</small></span>" + G.r + "</button>";
     page.appendChild(opts);
     var likes = S.ids(S.list("likes")), mine = S.ids(S.list("mylist")), recent = S.ids(S.list("recent")), no = S.ids(S.list("dislikes"));
     function shelf(title, list, share, all) {
@@ -581,7 +682,7 @@
       return fetch("https://api.tvmaze.com/shows/" + show.id + "/episodes").then(function (r) { return r.json(); });
     }).then(function (list) {
       var by = {};
-      list.forEach(function (e) { if (!e.season || e.number == null) return; (by[e.season] = by[e.season] || []).push({ n: e.number, title: e.name || "Episode " + e.number,
+      list.forEach(function (e) { if (!e.season || e.number == null) return; (by[e.season] = by[e.season] || []).push({ s: e.season, n: e.number, title: e.name || "Episode " + e.number,
         desc: (e.summary || "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim(), runtime: e.runtime, date: e.airdate,
         img: e.image ? (e.image.original || e.image.medium) : null, links: {} }); });
       var seasons = Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return { n: n, eps: by[n] }; });
@@ -589,23 +690,36 @@
       return seasons;
     }).catch(function (e) { delete EPS[t.id]; throw e; }));
   }
+  // Up Next: remember the last episode you opened, per profile
+  function epKey() { return "epsdone" + (S.state.profile ? "@" + S.state.profile : ""); }
+  function lastEp(t) { return (S.state[epKey()] || {})[t.id] || null; }
+  function markEp(t, ep) { var m = Object.assign({}, S.state[epKey()] || {}); m[t.id] = { s: ep.s, n: ep.n, at: Date.now() }; S.setRaw(epKey(), m); }
+  function nextEp(ss, last) {
+    if (!last) return null; var si = ss.findIndex(function (x) { return x.n === last.s; }); if (si < 0) return null;
+    var e = ss[si].eps.filter(function (x) { return x.n > last.n; })[0]; if (e) return e;
+    return ss[si + 1] ? ss[si + 1].eps[0] : null;
+  }
   function epDate(d) { if (!d) return ""; var x = new Date(d + "T12:00:00"); return x > new Date() ? "Coming " + x.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
   function loadEpisodes(t, box, sn) {
     var app = epApp(t);
     box.innerHTML = '<div class="spin"></div>';
     tvGuide(t).then(function (ss) {
       if (curT !== t) return;
-      var s = ss.filter(function (x) { return x.n === sn; })[0] || ((t.genres || []).indexOf("rly") >= 0 ? ss[ss.length - 1] : ss[0]);   // reality shows open on the newest season
+      var last = lastEp(t), nx = nextEp(ss, last);
+      var s = ss.filter(function (x) { return x.n === sn; })[0] || (nx && ss.filter(function (x) { return x.n === nx.s; })[0]) ||
+        ((t.genres || []).indexOf("rly") >= 0 ? ss[ss.length - 1] : ss[0]);   // reality shows open on the newest season
       box._ss = ss;
-      box.innerHTML = '<div class="eptop"><button class="seasel" data-seasons>Season ' + s.n + (ss.length > 1 ? G.down : "") + "</button><small>" + s.eps.length + " episodes</small></div>";
+      box.innerHTML = (nx ? '<button class="upnext" data-upnext>' + G.play + '<span><small>Up next</small>S' + nx.s + " · E" + nx.n + " " + esc(nx.title) + "</span></button>" : "") +
+        '<div class="eptop"><button class="seasel" data-seasons>Season ' + s.n + (ss.length > 1 ? G.down : "") + "</button><small>" + s.eps.length + " episodes</small></div>";
       var el = h("div", "eps"); box.appendChild(el);
       s.eps.forEach(function (ep) {
-        var e = h("div", "ep"); e._ep = ep;
+        var e = h("div", "ep" + (last && (ep.s < last.s || (ep.s === last.s && ep.n <= last.n)) ? " seen" : "") + (nx && ep.s === nx.s && ep.n === nx.n ? " next" : "")); e._ep = ep;
         e.innerHTML = '<div class="eh"><div class="eth">' + (ep.img ? '<img loading="lazy" decoding="async" src="' + esc(ep.img) + '" onload="this.classList.add(\'ok\')">' : '<div class="noimg" style="--h:' + (S.glowHue(t) + ep.n * 23) % 360 + '"><b>' + ep.n + "</b><small>EPISODE</small></div>") +
           (ep.img ? "<span>" + G.play + "</span>" : "") + '</div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + [ep.runtime ? ep.runtime + "m" : "", epDate(ep.date)].filter(Boolean).join(" · ") + "</small></div></div>" +
           (ep.desc ? "<p>" + esc(ep.desc) + "</p>" : "");
         el.appendChild(e);
       });
+      box._nx = nx;
       box.insertAdjacentHTML("beforeend", '<div class="epnote">Tap an episode to open ' + esc(LABEL[app] || "the app") + " — it picks up where you left off.</div>");
     }).catch(function () {
       if (curT !== t) return;
@@ -619,6 +733,7 @@
   }
   function playEp(t, ep) {
     var app = epApp(t); if (!app) return;
+    if (ep.s) markEp(t, ep);
     if (app === "netflix") { S.markRecent(t.id); return window.V.call("play", { app: app, url: ep.links.netflix || S.playUrl(app, t) }); }
     S.playEpisode(t, app, ep);
   }
@@ -682,7 +797,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -692,6 +807,11 @@
     if (D.yt) { closeTrailer(); return window.vesperOpen("youtube", "https://www.youtube.com/watch?v=" + D.yt); }
     if (D.mute) return toggleMute(el);
     if (D.qd) { closeSheet(); return openDetail(D.qd); }
+    if (D.upnext != null) { var bx = el.closest(".dsect"); if (bx && bx._nx && curT) { buzz(); playEp(curT, bx._nx); setTimeout(function () { if (curT) loadEpisodes(curT, bx); }, 800); } return; }
+    if (D.qr != null) { closeSheet(); return quickRate(); }
+    if (D.tmax) { setPref("tmax", +D.tmax); buzz(); closeSheet(); return show("home", "time"); }
+    if (D.together != null) return togetherSheet();
+    if (D.tpart) return togetherPicks(D.tpart);
     if (D.more != null) { el.parentNode.classList.add("open"); return; }
     if (D.similar) { var sm = S.similar(S.T[D.similar], 12).filter(function (x) { return (x.avail || []).length && !S.hiddenSet()[x.id]; }); if (sm.length) openDetail(sm[Math.floor(Math.random() * Math.min(6, sm.length))].id); return; }
     if (D.all) { var AL = { recent: "Continue Watching", mylist: "My List", likes: "Liked", dislikes: "Not for Me" }; var items = S.ids(S.list(D.all));
@@ -707,7 +827,7 @@
     if (D.dt) return dtab(D.dt);
     if (D.seasons != null) return seasonsSheet(el.closest(".dsect"));
     if (D.season) { closeSheet(); return loadEpisodes(curT, $("detail").querySelector(".dsect"), +D.season); }
-    if (el.classList.contains("ep") && curT) return playEp(curT, el._ep);
+    if (el.classList.contains("ep") && curT) { var b2 = el.closest(".dsect"); playEp(curT, el._ep); setTimeout(function () { if (curT && b2) loadEpisodes(curT, b2, el._ep.s); }, 800); return; }
     if (D.tab) { closeSheet(); closeDetail(); if (D.tab === tab && tab === "home" && sec !== "home") return show("home", "home"); if (D.tab === tab) { $("view").scrollTo({ top: 0, behavior: "smooth" }); return; } return show(D.tab, null, null, true); }
     if (D.era) { setPref("era", D.era); buzz(); closeSheet(); closeDetail(); return show("home", "throwback"); }
     if (D.go) { closeSheet(); closeDetail(); return show("home", D.go); }
@@ -715,6 +835,7 @@
     if (D.sheet === "cats") return catsSheet();
     if (D.sheet === "place") return placeSheet();
     if (D.sheet === "me") return meSheet();
+    if (D.sheet === "time") return timeSheet();
     if (D.sheet === "people") return peopleSheet();
     if (D.pick != null) { var pk = S.pickForMe(); if (pk) openDetail(pk.id); return; }
     if (D.nh) { arg = D.nh; return rerender(); }
@@ -786,7 +907,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v12 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v13 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
