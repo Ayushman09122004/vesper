@@ -2,6 +2,7 @@
 // Only looks up titles it hasn't checked yet, so the daily run is quick. Usage: node tools/trailers.mjs [max]
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const cat = JSON.parse(fs.readFileSync(path.join(root, "catalog.json"), "utf8"));
 const file = path.join(root, "trailers.json");
@@ -10,12 +11,15 @@ const max = +process.argv[2] || 4000;
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
 const todo = (cat.titles || []).filter(t => t.backdrop && !(t.id in T)).slice(0, max);
 console.log("looking up", todo.length, "of", cat.titles.length);
+// download a page (falls back to curl when Node's fetch can't connect)
+async function get(url) {
+  try { const r = await fetch(url, { headers: { "user-agent": UA, "accept-language": "en" } }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.text(); }
+  catch (e) { return await new Promise((res, rej) => execFile("curl", ["-sfL", "--max-time", "20", "-A", UA, "-H", "Accept-Language: en", url], { maxBuffer: 20e6 }, (err, out) => err ? rej(err) : res(out))); }
+}
 function norm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
 async function find(t) {
   const q = t.title + (t.type === "MOVIE" && t.year ? " " + t.year : "") + " official trailer";
-  const r = await fetch("https://www.youtube.com/results?search_query=" + encodeURIComponent(q) + "&sp=EgIQAQ%253D%253D", { headers: { "user-agent": UA, "accept-language": "en" } });
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  const html = await r.text(), re = /"videoRenderer":\{"videoId":"([\w-]{11})".*?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
+  const html = await get("https://www.youtube.com/results?search_query=" + encodeURIComponent(q) + "&sp=EgIQAQ%253D%253D"), re = /"videoRenderer":\{"videoId":"([\w-]{11})".*?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
   const words = norm(t.title).split(" ").filter(w => w.length > 1), out = [];
   let m; while ((m = re.exec(html)) && out.length < 5) out.push({ id: m[1], title: norm(JSON.parse('"' + m[2] + '"')) });
   const ok = out.find(v => /trailer|teaser/.test(v.title) && words.filter(w => v.title.includes(w)).length >= Math.ceil(words.length * 0.6));
