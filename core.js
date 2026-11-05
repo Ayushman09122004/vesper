@@ -12,7 +12,7 @@
 
   var FIELDS = "id objectType\n" +
     " ... on Show { totalSeasonCount seasons { totalEpisodeCount } }\n" +
-    " content(country:IN,language:\"en\"){ title originalReleaseYear shortDescription posterUrl runtime ageCertification productionCountries" +
+    " content(country:IN,language:\"en\"){ title originalTitle originalReleaseYear shortDescription posterUrl runtime ageCertification productionCountries" +
     "  backdrops{backdropUrl} genres{shortName} scoring{imdbScore imdbVotes tmdbPopularity} credits{role name} externalIds{imdbId} }\n" +
     " popularityRank(country:IN){ rank trend }\n" +
     " offers(country:IN,platform:WEB){ monetizationType standardWebURL package{shortName} }";
@@ -95,7 +95,7 @@
       pop: +(s.tmdbPopularity || 0).toFixed(2), rank: n.popularityRank && n.popularityRank.rank || null, trend: n.popularityRank && n.popularityRank.trend || null,
       genres: (c.genres || []).map(function (g) { return g.shortName; }).slice(0, 5), countries: (c.productionCountries || []).slice(0, 3),
       runtime: c.runtime || null, cert: c.ageCertification || null, seasons: n.totalSeasonCount || null, eps: eps || null,
-      cast: cast, dirs: dirs, imdb_id: (c.externalIds || {}).imdbId || null, poster: path(c.posterUrl), backdrop: b, avail: avail, links: links, segs: [] };
+      otitle: c.originalTitle && c.originalTitle !== c.title ? c.originalTitle : undefined, cast: cast, dirs: dirs, imdb_id: (c.externalIds || {}).imdbId || null, poster: path(c.posterUrl), backdrop: b, avail: avail, links: links, segs: [] };
   }
   function decent(t, minVotes) { return (t.votes >= minVotes && (t.imdb || 0) >= 5.5) || (t.rank && t.rank <= 300); }
   function ymd(d) { return d.toISOString().slice(0, 10); }

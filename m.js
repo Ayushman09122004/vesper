@@ -512,7 +512,7 @@
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
     chips.style.margin = "0 0 14px"; page.appendChild(chips); page.appendChild(body);
     inp.value = arg || "";
-    var t = null;
+    var t = null, rawOnly = false;
     function run() {
       var q = inp.value.trim(); arg = q; box.classList.toggle("has", !!q); body.textContent = ""; chips.textContent = "";
       if (!q) {
@@ -529,7 +529,20 @@
           body.appendChild(li); });
         return;
       }
-      var R = smartSearch(q);
+      var fixedQ = autocorrect(q);
+      if (!rawOnly && fixedQ !== q && S.norm(fixedQ) !== S.norm(q)) body.appendChild(h("div", "fixq", "Showing results for <b>" + esc(fixedQ) + '</b><button data-raw="' + esc(q) + '">Search “' + esc(q) + "” instead</button>"));
+      var R = smartSearch(rawOnly ? q : fixedQ); rawOnly = false;
+      if (R.sections) {
+        chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
+        if (!R.sections.length) { body.appendChild(h("div", "empty", "<b>Nothing like that on your apps</b>Try a nearby year, or drop a word.")); return; }
+        R.sections.forEach(function (sx) {
+          body.appendChild(h("div", "sec-h", esc(sx.title) + (sx.sub ? ' <small class="secsub">' + esc(sx.sub) + "</small>" : "")));
+          var g = gridOf(sx.items);
+          if (sx.years) [].forEach.call(g.children, function (c, k) { var t = sx.items[k]; if (t && t.year) c.insertAdjacentHTML("beforeend", '<span class="yr">' + t.year + "</span>"); });
+          body.appendChild(g);
+        });
+        return;
+      }
       chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
       if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", "<b>No matches</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
       if (R.top) {
@@ -548,7 +561,9 @@
     inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { saveQ(); inp.blur(); } });
     body.addEventListener("click", saveQ, true);
     box.querySelector(".clr").addEventListener("click", function () { inp.value = ""; run(); inp.focus(); });
-    page.addEventListener("click", function (e) { var b = e.target.closest("[data-q]"); if (b) { inp.value = b.dataset.q; run(); saveQ(); } });
+    page.addEventListener("click", function (e) {
+      var r0 = e.target.closest("[data-raw]"); if (r0) { rawOnly = true; run(); return; }
+      var b = e.target.closest("[data-q]"); if (b) { inp.value = b.dataset.q; run(); saveQ(); } });
     run();
     if (!inp.value) setTimeout(function () { inp.focus(); }, 300);
   }
@@ -564,7 +579,162 @@
     funny: "comedy|funny|hilarious", scary: "horror|terrif|haunt|scary", ghost: "ghost|haunt|spirit|paranormal", cop: "cop|police|detective|officer", lawyer: "lawyer|attorney|court|trial",
     doctor: "doctor|hospital|surgeon|medical", sport: "sport|team|coach|football|basketball|baseball|boxing", music: "music|band|singer|musician|concert", dance: "dance|dancer|ballet" };
   var STOP = { the: 1, a: 1, an: 1, and: 1, of: 1, with: 1, movie: 1, movies: 1, film: 1, films: 1, show: 1, shows: 1, series: 1, like: 1, about: 1, set: 1, in: 1, for: 1, vibe: 1, vibes: 1 };
+  var COUNTRY = { korean: ["KR"], korea: ["KR"], kdrama: ["KR"], kdramas: ["KR"], japanese: ["JP"], japan: ["JP"], jdrama: ["JP"], indian: ["IN"], india: ["IN"], bollywood: ["IN"],
+    hindi: ["IN"], tamil: ["IN"], telugu: ["IN"], malayalam: ["IN"], kannada: ["IN"], american: ["US"], usa: ["US"], hollywood: ["US"], british: ["GB"], uk: ["GB"], england: ["GB"],
+    spanish: ["ES"], spain: ["ES"], french: ["FR"], france: ["FR"], german: ["DE"], germany: ["DE"], italian: ["IT"], italy: ["IT"], chinese: ["CN", "HK"], china: ["CN"], cdrama: ["CN"],
+    taiwanese: ["TW"], thai: ["TH"], turkish: ["TR"], mexican: ["MX"], australian: ["AU"], canadian: ["CA"], irish: ["IE"], danish: ["DK"], swedish: ["SE"], norwegian: ["NO"],
+    scandinavian: ["NO", "SE", "DK", "FI", "IS"], nordic: ["NO", "SE", "DK", "FI", "IS"], european: ["FR", "DE", "ES", "IT", "NO", "SE", "DK", "BE", "NL", "PL", "IE"], pakistani: ["PK"], filipino: ["PH"], brazilian: ["BR"] };
+  var CNAME = { KR: "Korean", JP: "Japanese", IN: "Indian", US: "American", GB: "British", ES: "Spanish", FR: "French", DE: "German", IT: "Italian", CN: "Chinese", TW: "Taiwanese", TH: "Thai",
+    TR: "Turkish", MX: "Mexican", AU: "Australian", CA: "Canadian", IE: "Irish", DK: "Danish", SE: "Swedish", NO: "Norwegian", PK: "Pakistani", PH: "Filipino", BR: "Brazilian" };
+  var TYPEW = { movie: "MOVIE", movies: "MOVIE", film: "MOVIE", films: "MOVIE", cinema: "MOVIE", series: "SHOW", show: "SHOW", shows: "SHOW", tv: "SHOW", season: "SHOW", episodes: "SHOW",
+    drama: "SHOW?", dramas: "SHOW?", kdrama: "SHOW", kdramas: "SHOW", jdrama: "SHOW", cdrama: "SHOW" };
+  var GENREW = { thriller: "trl", thrillers: "trl", horror: "hrr", scary: "hrr", comedy: "cmy", comedies: "cmy", funny: "cmy", romance: "rma", romantic: "rma", romcom: "rma",
+    action: "act", crime: "crm", scifi: "scf", sci: "scf", fantasy: "fnt", anime: "ani", animated: "ani", animation: "ani", cartoon: "ani", documentary: "doc", documentaries: "doc", docuseries: "doc",
+    war: "war", historical: "hst", history: "hst", period: "hst", family: "fml", kids: "fml", sport: "spt", sports: "spt", musical: "msc", music: "msc", reality: "rly", western: "wsn" };
+  var GNAME = { trl: "thrillers", hrr: "horror", cmy: "comedies", rma: "romance", act: "action", crm: "crime", scf: "sci-fi", fnt: "fantasy", ani: "anime", doc: "documentaries", war: "war",
+    hst: "historical", fml: "family", spt: "sports", msc: "musicals", rly: "reality", wsn: "westerns", drm: "dramas" };
+  function parseQuery(q) {
+    var w = S.norm(q).replace(/\bk drama/g, "kdrama").replace(/\bj drama/g, "jdrama").replace(/\bc drama/g, "cdrama").replace(/\bsci fi\b/g, "scifi").replace(/\bscience fiction\b/g, "scifi").replace(/\brom com\b/g, "romcom").split(" ").filter(Boolean);
+    var P = { cc: null, type: null, genres: [], year: null, era: null, rest: [] }, dramaWord = false;
+    w.forEach(function (x) {
+      var m = x.match(/^(\d{2}|\d{4})s$/), y = x.match(/^(19|20)\d{2}$/);
+      if (m) { var d = +m[1]; d = d < 100 ? (d >= 30 ? 1900 + d : 2000 + d) : d; P.era = [d, d + 9]; return; }
+      if (y) { P.year = +x; return; }
+      if (COUNTRY[x]) { P.cc = (P.cc || []).concat(COUNTRY[x]); if (/drama/.test(x)) P.type = "SHOW"; return; }
+      if (TYPEW[x]) { if (TYPEW[x] === "SHOW?") dramaWord = true; else P.type = TYPEW[x]; return; }
+      if (GENREW[x]) { if (P.genres.indexOf(GENREW[x]) < 0) P.genres.push(GENREW[x]); return; }
+      if (!STOP[x]) P.rest.push(x);
+    });
+    // "korean drama" = K-dramas (series); "drama" on its own = the drama genre
+    if (dramaWord) { if (P.cc && !P.type) P.type = "SHOW"; else if (!P.cc) P.genres.push("drm"); }
+    P.structured = !!(P.cc || P.type || P.genres.length || P.year || P.era);
+    return P;
+  }
+  // how surely a title comes from a country: its original-language title is the strongest clue,
+  // then being made only there; a co-production with Hollywood counts least (and animation outsourced abroad not at all)
+  var SCRIPT = { KR: /[\uac00-\ud7af]/, JP: /[\u3040-\u30ff]/, IN: /[\u0900-\u0dff]/, CN: /[\u4e00-\u9fff]/, TH: /[\u0e00-\u0e7f]/, TW: /[\u4e00-\u9fff]/ };
+  function countryScore(t, cc) {
+    var c = t.countries || [], hit = c.filter(function (x) { return cc.indexOf(x) >= 0; }); if (!hit.length) return 0;
+    var ot = t.otitle || "", main = cc[0], sc = 1;
+    if (SCRIPT[main] && SCRIPT[main].test(ot)) sc = 3;
+    else if (c.length === hit.length) sc = 3;
+    else if (main === "US") sc = 2;
+    else if (SCRIPT[main]) sc = 1;   // Korean/Japanese/Indian/Chinese/Thai films nearly always carry their own-script title; a co-production without one counts least
+    else if (c.indexOf("US") < 0 && c.indexOf("GB") < 0) sc = 2;
+    else if (ot && !/^[\x00-\x7f]+$/.test(ot) && !SCRIPT[main]) sc = 2;   // e.g. a Spanish or French original title
+    if ((t.genres || []).indexOf("ani") >= 0 && main !== "JP" && !(SCRIPT[main] && SCRIPT[main].test(ot))) sc -= 1;
+    return sc;
+  }
+  function qual(t) { return Math.log(1 + (t.votes || 0)) * 1.25 + (t.imdb || 6) * 1.6 + (t.rank ? Math.max(0, 6 - Math.log(t.rank)) : 0); }
+  function describe(P, withYear) {
+    var GADJ = { trl: "thriller", hrr: "horror", cmy: "comedy", rma: "romance", act: "action", crm: "crime", scf: "sci-fi", fnt: "fantasy", ani: "anime", doc: "documentary", war: "war",
+      hst: "historical", fml: "family", spt: "sports", msc: "musical", rly: "reality", wsn: "western", drm: "drama" };
+    var ty = P.type === "MOVIE" ? "movies" : P.type === "SHOW" ? (P.cc && P.cc[0] === "KR" ? "dramas" : "series") : "";
+    var c = P.cc ? (CNAME[P.cc[0]] || "") + " " : "", g = P.genres.length ? P.genres.map(function (x) { return (ty ? GADJ : GNAME)[x]; }).join(" & ") : "";
+    if (!ty && !g) ty = "titles";
+    var txt = (c + (g ? g + (ty ? " " + ty : "") : ty)).trim();
+    txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+    if (withYear && P.year) txt += " from " + P.year; else if (withYear && P.era) txt += " from the " + P.era[0] + "s";
+    return txt;
+  }
+  function structuredSearch(q, P) {
+    var hid = S.hiddenSet();
+    var base = S.ALL.filter(function (t) {
+      if (!(t.avail || []).length || hid[t.id]) return false;
+      if (P.cc && countryScore(t, P.cc) < (P.ccLoose ? 1 : 2)) return false;   // made there, not just co-produced
+      if (P.type && t.type !== P.type) return false;
+      if (P.genres.length && !P.genres.every(function (g) { return (t.genres || []).indexOf(g) >= 0; })) return false;
+      return true;
+    });
+    if (P.cc && !P.ccLoose && base.length < 10) { P.ccLoose = true; return structuredSearch(q, P); }
+    // any leftover words ("revenge", "college", "zombie"…) must fit the story too, when possible
+    var rest = P.rest.join(" ");
+    if (rest) {
+      var pats = P.rest.filter(function (w) { return w.length >= 3; }).map(function (w) { var syn = SYN[w] || (w.length > 5 ? w.slice(0, w.length - 2) : w); return new RegExp("\\b(?:" + syn.split("|").map(function (x) { return x.trim().replace(/[.*+?^${}()[\]\\]/g, "\\$&"); }).join("|") + ")", "i"); });
+      var narrowed = base.filter(function (t) { var h2 = [t.title, t.desc || ""].join(" "); return pats.every(function (p) { return p.test(h2); }); });
+      if (narrowed.length >= 3) base = narrowed;
+    }
+    var sections = [], used = {};
+    function take(list, n) { var out = []; list.forEach(function (t) { if (!used[t.id] && out.length < n) { used[t.id] = 1; out.push(t); } }); return out; }
+    var byQ = function (l) { return l.slice().sort(function (a, b) { return qual(b) - qual(a); }); };
+    if (P.year) {
+      var exact = take(byQ(base.filter(function (t) { return t.year === P.year; })), 40);
+      if (exact.length) sections.push({ title: describe(P, true), items: exact });
+      // then the years around it: 1 year either side first, then 2, then 3
+      var near = base.filter(function (t) { return t.year && t.year !== P.year && Math.abs(t.year - P.year) <= 3; })
+        .sort(function (a, b) { return Math.abs(a.year - P.year) - Math.abs(b.year - P.year) || qual(b) - qual(a); });
+      var nr = take(near, 40); if (nr.length) sections.push({ title: "Around " + P.year, sub: (P.year - 3) + "–" + (P.year + 3), items: nr, years: true });
+    } else if (P.era) {
+      var inE = take(byQ(base.filter(function (t) { return t.year >= P.era[0] && t.year <= P.era[1]; })), 60);
+      if (inE.length) sections.push({ title: describe(P, true), items: inE, years: true });
+      var edge = take(base.filter(function (t) { return t.year && (Math.abs(t.year - P.era[0]) <= 2 || Math.abs(t.year - P.era[1]) <= 2); }).sort(function (a, b) { return qual(b) - qual(a); }), 24);
+      if (edge.length) sections.push({ title: "Just before & after", items: edge, years: true });
+    } else {
+      // no year: if both films and series match, show each, the best first
+      if (!P.type) {
+        var mv = take(byQ(base.filter(function (t) { return t.type === "MOVIE"; })), 30), sh = take(byQ(base.filter(function (t) { return t.type === "SHOW"; })), 30);
+        var first = (sh.length && (!mv.length || qual(sh[0]) >= qual(mv[0]))) ? [["SHOW", sh], ["MOVIE", mv]] : [["MOVIE", mv], ["SHOW", sh]];
+        first.forEach(function (x) { if (x[1].length) { var Pt = Object.assign({}, P, { type: x[0] }); sections.push({ title: describe(Pt), items: x[1] }); } });
+      } else sections.push({ title: describe(P), items: take(byQ(base), 60) });
+      var newer = take(base.filter(function (t) { return t.year >= new Date().getFullYear() - 1; }).sort(function (a, b) { return qual(b) - qual(a); }), 20);
+      if (newer.length) sections.splice(1, 0, { title: "New " + describe(P).replace(/^(\w)/, function (c) { return c.toLowerCase(); }), items: newer });
+    }
+    // still room? relax: same country & type, any year, then similar genres
+    if (sections.reduce(function (n, x) { return n + x.items.length; }, 0) < 12) {
+      var wider = take(byQ(S.ALL.filter(function (t) { return (t.avail || []).length && !hid[t.id] && (!P.cc || countryScore(t, P.cc) >= 2) && (!P.type || t.type === P.type); })), 30);
+      if (wider.length) sections.push({ title: "More " + describe(Object.assign({}, P, { genres: [], year: null, era: null })).replace(/^(\w)/, function (c) { return c.toLowerCase(); }), items: wider });
+    }
+    // refine buttons
+    var label = describe(P).toLowerCase(), chips = [];
+    if (!P.type && P.cc) chips.push(CNAME[P.cc[0]].toLowerCase() + " movies", CNAME[P.cc[0]].toLowerCase() + " series");
+    if (!P.year && !P.era) chips.push(label + " 2010s", label + " 2020s");
+    if (P.year) chips.push(label + " " + (P.year - 1), label + " " + (P.year + 1));
+    if (!P.genres.length) ["thriller", "romance", "comedy", "crime"].forEach(function (g) { chips.push((P.cc ? CNAME[P.cc[0]].toLowerCase() + " " : "") + g + (P.type === "MOVIE" ? " movies" : P.type === "SHOW" ? " series" : "") + (P.year ? " " + P.year : "")); });
+    return { sections: sections, chips: chips.slice(0, 8) };
+  }
+  // ---------- autocorrect: every word checked against titles, cast and the words search understands ----------
+  var VOCAB = null;
+  function vocab() {
+    if (VOCAB) return VOCAB; var f = {};
+    function add(w, n) { if (w.length >= 2 && !/^\d+$/.test(w)) f[w] = (f[w] || 0) + n; }
+    S.ALL.forEach(function (t) { var wt = 1 + Math.log(1 + (t.votes || 0));
+      S.norm(t.title).split(" ").forEach(function (w) { add(w, wt * 3); });
+      (t.cast || []).slice(0, 4).concat(t.dirs || []).forEach(function (n) { S.norm(n).split(" ").forEach(function (w) { add(w, wt); }); }); });
+    [COUNTRY, TYPEW, GENREW, SYN].forEach(function (m) { Object.keys(m).forEach(function (k) { k.split(" ").forEach(function (w) { add(w, 400); }); }); });
+    ["new", "york", "rain", "rainy", "college", "heist", "vibe", "school", "detective", "road", "trip", "small", "town", "time", "travel", "wedding", "zombie", "revenge", "prison", "island", "summer"].forEach(function (w) { add(w, 300); });
+    VOCAB = { f: f, words: Object.keys(f) }; return VOCAB;
+  }
+  function editDist(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var prev = [], cur, i, j; for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) { cur = [i]; var best = i;
+      for (j = 1; j <= b.length; j++) { var c = a[i - 1] === b[j - 1] ? 0 : 1; cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + c);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) cur[j] = Math.min(cur[j], prev[j - 2] + 1);   // swapped letters
+        if (cur[j] < best) best = cur[j]; }
+      if (best > max) return max + 1; prev2 = prev; prev = cur; }
+    return prev[b.length];
+  }
+  var prev2 = null;
+  function autocorrect(q) {
+    var V = vocab(), words = S.norm(q).split(" ").filter(Boolean), changed = false;
+    var fixed = words.map(function (w, idx) {
+      if (V.f[w] || /^\d/.test(w) || w.length < 4) return w;
+      var last = idx === words.length - 1;
+      if (last && V.words.some(function (x) { return x.indexOf(w) === 0; })) return w;   // still typing a real word
+      var max = w.length >= 7 ? 2 : 1, best = null, bd = 9, bf = 0;
+      V.words.forEach(function (x) { if (Math.abs(x.length - w.length) > max || x[0] !== w[0] && max < 2) return;
+        var d = editDist(w, x, max); if (d <= max && (d < bd || (d === bd && V.f[x] > bf))) { best = x; bd = d; bf = V.f[x]; } });
+      if (best) { changed = true; return best; } return w;
+    });
+    return changed ? fixed.join(" ") : q;
+  }
   function smartSearch(q) {
+    var PQ = parseQuery(q);
+    // pure "kind of thing" searches (korean movies 2016, thriller 2010s…) — unless it's clearly a real title
+    if (PQ.structured) {
+      var exactTitle = S.ALL.filter(function (t) { return S.norm(t.title) === S.norm(q); })[0];
+      if (!exactTitle) return structuredSearch(q, PQ);
+    }
     var words = S.norm(q).split(" ").filter(Boolean), era = null, keep = [];
     words.forEach(function (w) {
       var m = w.match(/^(\d{2}|\d{4})s$/), y = w.match(/^(19|20)\d{2}$/);
@@ -605,6 +775,7 @@
     }
     // 3) more like the top result
     var similar = top ? S.similar(top, 20).filter(function (t) { return avail(t) && !shown[t.id]; }) : [];
+    if (top && S.norm(top.title) === nr) vibe = [];   // you searched a real title: show what's like it, not word matches
     var chips = byName.people.slice(0, 3).concat(byName.genres.slice(0, 2));
     if (!era && rest) chips = chips.concat([rest + " 2000s", rest + " 2010s"]).slice(0, 6);
     return { top: top, titles: titles, similar: similar, vibe: vibe, chips: chips, label: [rest, era ? (era[0] === era[1] ? era[0] : era[0] + "s") : ""].filter(Boolean).join(" · ") };
@@ -1006,7 +1177,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v16 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v17 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
