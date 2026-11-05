@@ -611,3 +611,20 @@ html[data-era="e15"] .eratag{color:#7fd3d0;}
 html[data-era="e05"] .eras button.on{background:#f1dfc2;}
 html[data-era="e10"] .eras button.on{background:#f7d9e6;}
 html[data-era="e15"] .eras button.on{background:#d5f1ef;}
+/* "like X" source card */
+.likeof{display:flex;align-items:center;gap:12px;margin:0 16px 18px;padding:8px 12px 8px 8px;border-radius:12px;background:rgba(255,255,255,.06);}
+.likeof img{width:44px;aspect-ratio:2/3;border-radius:5px;object-fit:cover;}
+.likeof span{flex:1;font-size:16px;font-weight:700;}
+.likeof small{display:block;font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--amber);}
+.likeof svg{width:18px;height:18px;color:#999;}
+/* welcome-back check-in */
+.checkin{display:flex;gap:14px;align-items:center;padding:4px 20px 16px;}
+.checkin img{width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;}
+.checkin small{display:block;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--amber);}
+.checkin b{font-size:19px;line-height:1.2;}
+.cibtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px 6px;}
+.cibtns button{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:12px;background:#24242e;font-size:15px;font-weight:700;}
+.cibtns button svg{width:20px;height:20px;}
+.cibtns button[data-ci="love"] svg{color:#46d369;}.cibtns button[data-ci="meh"] svg{color:#ff6b6b;}
+#toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;}
+#toast.act button{background:#111;color:#fff;font-size:13px;font-weight:700;padding:7px 12px;border-radius:14px;white-space:nowrap;}

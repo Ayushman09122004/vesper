@@ -57,7 +57,16 @@
   };
   var tab = "home", sec = "home", arg = null, noted = false, POS = {};
   function setPref(k, v) { var p = Object.assign({}, S.state.prefs || {}); p[k] = v; S.setRaw("prefs", p); }
-  function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("on"); }, 1800); }
+  function toast(msg, act, fn) {
+    var t = $("toast"); t.textContent = msg; t.classList.toggle("act", !!act);
+    if (act) { var b = document.createElement("button"); b.innerHTML = act; b.onclick = function (e) { e.stopPropagation(); t.classList.remove("on"); fn(); }; t.appendChild(b); }
+    t.classList.add("on"); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("on"); }, act ? 4500 : 1800);
+  }
+  // the title's own page in its app (not playback), where that app's own + My List button is
+  function openTitlePage(t) {
+    var a = t.orig && (t.avail || []).indexOf(t.orig) >= 0 ? t.orig : S.pickApp(t); if (!a) return;
+    window.vesperOpen(a, S.playUrl(a, t).replace("/watch/", "/title/"));
+  }
   // iPhone haptics: Safari gives a light tap when a switch control is toggled, so we keep a hidden one to "press"
   var hapEl = (function () { var w = h("div"); w.style.cssText = "position:fixed;left:-99px;top:0;width:1px;height:1px;overflow:hidden;opacity:0";
     w.innerHTML = '<input type="checkbox" switch id="hap"><label for="hap" id="hapl"></label>'; document.body.appendChild(w); return w.querySelector("label"); })();
@@ -575,6 +584,7 @@
       if (R.sections) {
         chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
         if (!R.sections.length) { body.appendChild(h("div", "empty", "<b>Nothing like that on your apps</b>Try a nearby year, or drop a word.")); return; }
+        if (R.like) { var lc = h("div", "likeof"); lc.dataset.id = R.like.id; lc.innerHTML = '<img src="' + S.po(R.like, "s332") + '"><span><small>Because you liked</small>' + esc(R.like.title) + "</span>" + G.r; body.appendChild(lc); }
         R.sections.forEach(function (sx) {
           body.appendChild(h("div", "sec-h", esc(sx.title) + (sx.sub ? ' <small class="secsub">' + esc(sx.sub) + "</small>" : "")));
           var g = gridOf(sx.items);
@@ -666,6 +676,14 @@
     return sc;
   }
   function qual(t) { return Math.log(1 + (t.votes || 0)) * 1.25 + (t.imdb || 6) * 1.6 + (t.rank ? Math.max(0, 6 - Math.log(t.rank)) : 0); }
+  // people: full names, or a distinctive surname ("nolan", "dicaprio"), most famous first
+  var PEOPLE = null;
+  function findPerson(rest) {
+    if (!PEOPLE) { var m = {}; S.ALL.forEach(function (t) { (t.cast || []).slice(0, 6).concat(t.dirs || []).forEach(function (n) { var k = S.norm(n); m[k] = m[k] || { n: n, k: k, c: 0 }; m[k].c += 1 + Math.log(1 + (t.votes || 0)) / 4; }); });
+      PEOPLE = Object.keys(m).map(function (k) { return m[k]; }).filter(function (p) { return p.c >= 2; }).sort(function (a, b) { return b.c - a.c; }); }
+    var r = S.norm(rest); if (r.length < 4) return null;
+    return PEOPLE.filter(function (p) { return p.k === r; })[0] || PEOPLE.filter(function (p) { return (" " + p.k).indexOf(" " + r) >= 0 && (r.indexOf(" ") > 0 || r.length >= 5); })[0] || null;
+  }
   function describe(P, withYear) {
     var GADJ = { trl: "thriller", hrr: "horror", cmy: "comedy", rma: "romance", act: "action", crm: "crime", scf: "sci-fi", fnt: "fantasy", ani: "anime", doc: "documentary", war: "war",
       hst: "historical", fml: "family", spt: "sports", msc: "musical", rly: "reality", wsn: "western", drm: "drama" };
@@ -674,6 +692,7 @@
     if (!ty && !g) ty = "titles";
     var txt = (c + (g ? g + (ty ? " " + ty : "") : ty)).trim();
     txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+    if (P.who) txt = (P.type === "MOVIE" ? "Films" : P.type === "SHOW" ? "Series" : "Everything") + (P.whoBy ? " by " : " with ") + P.who + (P.genres.length ? " · " + P.genres.map(function (x) { return GNAME[x]; }).join(" & ") : "");
     if (withYear && P.year) txt += " from " + P.year; else if (withYear && P.era) txt += " from the " + P.era[0] + "s";
     return txt;
   }
@@ -687,11 +706,14 @@
       return true;
     });
     if (P.cc && !P.ccLoose && base.length < 10) { P.ccLoose = true; return structuredSearch(q, P); }
+    // a person's name ("leonardo dicaprio movies", "nolan films 2010s")? then it's their work
+    var rest = P.rest.join(" "), who = rest ? findPerson(rest) : null;
+    if (who) { base = base.filter(function (t) { return (t.cast || []).concat(t.dirs || []).some(function (n) { return S.norm(n) === who.k; }); }); P.who = who.n; rest = "";
+      var asDir = base.filter(function (t) { return (t.dirs || []).some(function (n) { return S.norm(n) === who.k; }); }).length; P.whoBy = asDir * 2 >= base.length; P.whoK = who.k; }
     // any leftover words ("revenge", "college", "zombie"…) must fit the story too, when possible
-    var rest = P.rest.join(" ");
     if (rest) {
       var pats = P.rest.filter(function (w) { return w.length >= 3; }).map(function (w) { var syn = SYN[w] || (w.length > 5 ? w.slice(0, w.length - 2) : w); return new RegExp("\\b(?:" + syn.split("|").map(function (x) { return x.trim().replace(/[.*+?^${}()[\]\\]/g, "\\$&"); }).join("|") + ")", "i"); });
-      var narrowed = base.filter(function (t) { var h2 = [t.title, t.desc || ""].join(" "); return pats.every(function (p) { return p.test(h2); }); });
+      var narrowed = base.filter(function (t) { var h2 = [t.title, t.desc || "", (t.cast || []).join(" "), (t.dirs || []).join(" ")].join(" "); return pats.every(function (p) { return p.test(h2); }); });
       if (narrowed.length >= 3) base = narrowed;
     }
     var sections = [], used = {};
@@ -721,7 +743,8 @@
     }
     // still room? relax: same country & type, any year, then similar genres
     if (sections.reduce(function (n, x) { return n + x.items.length; }, 0) < 12) {
-      var wider = take(byQ(S.ALL.filter(function (t) { return (t.avail || []).length && !hid[t.id] && (!P.cc || countryScore(t, P.cc) >= 2) && (!P.type || t.type === P.type); })), 30);
+      var wider = take(byQ(S.ALL.filter(function (t) { return (t.avail || []).length && !hid[t.id] && (!P.cc || countryScore(t, P.cc) >= 2) && (!P.type || t.type === P.type) &&
+        (!P.whoK || (t.cast || []).concat(t.dirs || []).some(function (n) { return S.norm(n) === P.whoK; })); })), 30);
       if (wider.length) sections.push({ title: "More " + describe(Object.assign({}, P, { genres: [], year: null, era: null })).replace(/^(\w)/, function (c) { return c.toLowerCase(); }), items: wider });
     }
     // refine buttons
@@ -768,7 +791,38 @@
     });
     return changed ? fixed.join(" ") : q;
   }
+  // "like X": shared genres (the main one most), same director or cast, similar era and country, never animation for live-action
+  function likeOf(src) {
+    var sg = (src.genres || []).filter(function (g) { return g !== "drm"; }), main = sg[0] || (src.genres || [])[0];
+    var sd = (src.dirs || []).map(S.norm), sc = (src.cast || []).slice(0, 6).map(S.norm), sAni = (src.genres || []).indexOf("ani") >= 0, sFam = (src.genres || []).indexOf("fml") >= 0;
+    var sp = S._.primary(src) || (src.countries || [])[0];
+    return S.ALL.filter(function (t) { return t.id !== src.id && (t.genres || []).some(function (g) { return sg.indexOf(g) >= 0 || g === main; }); }).map(function (t) {
+      var tg = (t.genres || []).filter(function (g) { return g !== "drm"; }), inter = tg.filter(function (g) { return sg.indexOf(g) >= 0; }).length, uni = sg.length + tg.length - inter || 1;
+      var tAni = (t.genres || []).indexOf("ani") >= 0, tFam = (t.genres || []).indexOf("fml") >= 0;
+      var sc2 = (inter / uni) * 14 + ((t.genres || [])[0] === main || tg[0] === main ? 5 : 0);
+      if ((t.dirs || []).some(function (n) { return sd.indexOf(S.norm(n)) >= 0; })) sc2 += 9;
+      sc2 += (t.cast || []).filter(function (n) { return sc.indexOf(S.norm(n)) >= 0; }).length * 2.5;
+      if (src.year && t.year) sc2 += Math.max(0, 4 - Math.abs(src.year - t.year) / 4);
+      if (sp && (S._.primary(t) || (t.countries || [])[0]) === sp) sc2 += 2.5;
+      if (sAni !== tAni) sc2 -= 10; if (sFam !== tFam) sc2 -= 5;
+      sc2 += Math.log(1 + (t.votes || 0)) * 0.45 + ((t.imdb || 6) - 6) * 0.9;
+      return { t: t, s: sc2 };
+    }).sort(function (a, b) { return b.s - a.s; }).slice(0, 80).map(function (x) { return x.t; });
+  }
   function smartSearch(q) {
+    // "movies like inception", "shows like dark", "similar to money heist"
+    var lk = S.norm(q).match(/^(?:(movies?|films?|shows?|series|anime|kdramas?|something)\s+)?(?:like|similar to)\s+(.+)$/);
+    if (lk) {
+      var name = lk[2], src = S.ALL.filter(function (t) { return S.norm(t.title) === name; })[0] || S.search(name, 5).titles[0];
+      if (src) {
+        var ty = /movie|film/.test(lk[1] || "") ? "MOVIE" : /show|series|kdrama/.test(lk[1] || "") ? "SHOW" : null, T = S.taste();
+        var sim = likeOf(src).filter(function (t) { return (t.avail || []).length && (!ty || t.type === ty) && !S.hiddenSet()[t.id] && t.id !== src.id; });
+        if (/anime/.test(lk[1] || "")) sim = sim.filter(function (t) { return (t.genres || []).indexOf("ani") >= 0; });
+        var close = sim.slice(0, 18), more = sim.slice(18, 48).sort(function (a, b) { return (T.n >= 5 ? S.tasteScore(b, T) - S.tasteScore(a, T) : 0) || qual(b) - qual(a); });
+        return { sections: [{ title: (ty === "MOVIE" ? "Films" : ty === "SHOW" ? "Series" : "Titles") + " like " + src.title, items: close }].concat(more.length ? [{ title: "Also in that spirit", items: more }] : []),
+          chips: [src.title, "movies like " + src.title, "shows like " + src.title].filter(function (c) { return S.norm(c) !== S.norm(q); }), like: src };
+      }
+    }
     var PQ = parseQuery(q);
     // pure "kind of thing" searches (korean movies 2016, thriller 2010s…) — unless it's clearly a real title
     if (PQ.structured) {
@@ -956,7 +1010,8 @@
     var t = curT, box = $("detail").querySelector(".dsect"); if (!t || !box) return;
     qa(".dtabs button", $("detail")).forEach(function (b) { b.classList.toggle("on", b.dataset.dt === which); });
     box.textContent = "";
-    if (which === "more") { var l = S.similar(t, 24).filter(function (x) { return x.poster; }); box.appendChild(l.length ? gridOf(l) : h("div", "note", "Nothing similar on your apps yet.")); return; }
+    if (which === "more") { var hid0 = S.hiddenSet(), all0 = likeOf(t).filter(function (x) { return x.poster && (x.avail || []).length && !hid0[x.id]; });
+      var l = all0.filter(function (x) { return x.type === t.type; }); if (l.length < 12) l = l.concat(all0.filter(function (x) { return x.type !== t.type; })); l = l.slice(0, 24); box.appendChild(l.length ? gridOf(l) : h("div", "note", "Nothing similar on your apps yet.")); return; }
     loadEpisodes(t, box);
   }
   function epApp(t) { return S.pickApp(t); }
@@ -1100,7 +1155,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-ci],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -1121,7 +1176,8 @@
       return sheet("<h3>" + AL[D.all] + "</h3>", function (card) { card.appendChild(gridOf(items)); }); }
     if (inSheet && (D.list || D.like || D.dislike)) setTimeout(function () { closeSheet(); if (D.dislike && tab !== "search") rerender(); }, 120);
     if (D.remind) { var r = S.toggle("mylist", D.list, true); buzz(); toast(r ? "We'll keep it at the top of My List" : "Reminder removed"); el.innerHTML = r ? G.check + "Reminded" : G.bell + "Remind Me"; return; }
-    if (D.list) { var on = S.toggle("mylist", D.list, true); buzz(); toast(on ? "Added to My List" : "Removed from My List");
+    if (D.list) { var on = S.toggle("mylist", D.list, true), lt = S.T[D.list], la = lt && (lt.orig && (lt.avail || []).indexOf(lt.orig) >= 0 ? lt.orig : S.pickApp(lt)); buzz();
+      if (on && la) toast("Added to My List", "Add in " + LABEL[la].replace("Prime Video", "Prime") + " too ›", function () { openTitlePage(lt); }); else toast(on ? "Added to My List" : "Removed from My List");
       if (el.closest(".hero,.nhb")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); if (tab === "mylist" && !curT) rerender(); return; }
     if (D.like) { var l = S.like(D.like); buzz(); toast(l ? "Got it — more like this" : "Like removed"); refreshActs(); return; }
     if (D.dislike) { var n = S.dislike(D.dislike); buzz(); toast(n ? "Hidden — we won't show it again" : "It's back"); refreshActs(); return; }
@@ -1133,6 +1189,12 @@
     if (el.classList.contains("ep") && curT) { var b2 = el.closest(".dsect"); playEp(curT, el._ep); setTimeout(function () { if (curT && b2) loadEpisodes(curT, b2, el._ep.s); }, 800); return; }
     if (D.tab) { closeSheet(); closeDetail(); if (D.tab === tab && tab === "home" && sec !== "home") return show("home", "home"); if (D.tab === tab) { $("view").scrollTo({ top: 0, behavior: "smooth" }); return; } return show(D.tab, null, null, true); }
     if (D.roulette) return roulette(D.roulette);
+    if (D.ci) { var ct = S.T[D.cid]; closeSheet(); buzz(); if (!ct) return;
+      if (D.ci === "love") { if (!S.inList("likes", ct.id)) S.like(ct.id); toast("Noted — more like " + ct.title); }
+      else if (D.ci === "meh") { if (!S.inList("dislikes", ct.id)) S.dislike(ct.id); toast("Got it — fewer like this"); }
+      else if (D.ci === "done") { if (!S.inList("watched", ct.id)) S.toggle("watched", ct.id, true); toast("Marked as watched"); }
+      else if (D.ci === "next") { setTimeout(function () { openDetail(ct.id); }, 300); }
+      return; }
     if (D.era) { setPref("era", D.era); buzz(); closeSheet(); closeDetail(); return show("home", "throwback"); }
     if (D.go) { closeSheet(); closeDetail(); return show("home", D.go); }
     if (D.sheet === "apps") return appsSheet();
@@ -1218,7 +1280,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v19 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v20 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
@@ -1244,9 +1306,28 @@
     $("boot").innerHTML = '<div class="empty"><b>Can\'t reach Vesper</b>Check your connection and open it again.</div>';
   });
   // came back after a while: refresh the list quietly
+  // remember what you went off to watch, so Vesper can ask how it was when you come back
+  var _call = window.V.call;
+  window.V.call = function (n, a) {
+    if (n === "play" && a) { var id = a.id || (curT && curT.id); try { localStorage.setItem("vesper.lastPlay", JSON.stringify({ id: id, at: Date.now(), p: S.state.profile || "" })); } catch (e) {} }
+    return _call.apply(this, arguments);
+  };
+  function checkIn() {
+    var L = null; try { L = JSON.parse(localStorage.getItem("vesper.lastPlay") || "null"); } catch (e) {}
+    if (!L || !L.id || L.done) return; var gone = Date.now() - L.at, t = S.T[L.id];
+    if (!t || gone < 8 * 60e3 || gone > 14 * 3600e3 || (L.p || "") !== (S.state.profile || "")) return;
+    L.done = 1; try { localStorage.setItem("vesper.lastPlay", JSON.stringify(L)); } catch (e) {}
+    var nx = null, ss = EPS[t.id]; if (ss && ss.then === undefined) nx = null;
+    sheet('<div class="checkin"><img src="' + S.bd(t, "s640") + '"><div><small>Welcome back</small><b>How was ' + esc(t.title) + "?</b></div></div>" +
+      '<div class="cibtns"><button data-ci="love" data-cid="' + t.id + '">' + G.heart + "Loved it</button>" +
+      '<button data-ci="meh" data-cid="' + t.id + '">' + G.no + "Not for me</button>" +
+      (t.type === "MOVIE" ? '<button data-ci="done" data-cid="' + t.id + '">' + G.check + "Finished</button>" : '<button data-ci="next" data-cid="' + t.id + '">' + G.play + "Next episode</button>") +
+      '<button data-ci="later" data-cid="' + t.id + '">' + G.clock + "Still watching</button></div>");
+  }
   var hiddenAt = 0;
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) { hiddenAt = Date.now(); return; }
+    setTimeout(checkIn, 700);
     if (hiddenAt && Date.now() - hiddenAt > 4 * 3600e3) fetchCatalog().then(function (cat) { S.load(cat); TOPSET = null; noted = false; if (!$("detail").classList.contains("on")) show(tab, sec, arg); }).catch(function () {});
   });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (r) { r.update().catch(function () {}); }).catch(function () {});
