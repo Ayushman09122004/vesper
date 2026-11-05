@@ -203,6 +203,7 @@
     if (io) { io.disconnect(); io = null; }   // one loader per page, shared by every group of rows on it
     v.textContent = ""; v.appendChild(page);
     if (t !== "home") setAmb(null);
+    if (!(t === "home" && sec === "throwback")) delete document.documentElement.dataset.era;
     if (t === "home") renderSection(page, sec);
     else if (t === "new") renderNew(page);
     else if (t === "weather") renderWeather(page);
@@ -290,22 +291,35 @@
   }
 
   // ---------- Throwback: American films 2005–2019, one era at a time ----------
-  var ERAS = [{ k: "e05", label: "2005–09", tag: "Flip phones, iPods and indie soundtracks", a: 2005, b: 2009, seg: "us_e05" },
-    { k: "e10", label: "2010–14", tag: "Bromances, Instagram filters and New York lofts", a: 2010, b: 2014, seg: "us_e10" },
-    { k: "e15", label: "2015–19", tag: "Group chats, road trips and one last summer", a: 2015, b: 2019, seg: "us_e15" }];
+  var ERAS = [{ k: "e05", label: "2005–09", tag: "Flip phones, iPods and indie soundtracks", a: 2005, b: 2009, seg: "us_e05", tv: "us_se05" },
+    { k: "e10", label: "2010–14", tag: "Bromances, Instagram filters and New York lofts", a: 2010, b: 2014, seg: "us_e10", tv: "us_se10" },
+    { k: "e15", label: "2015–19", tag: "Group chats, road trips and one last summer", a: 2015, b: 2019, seg: "us_e15", tv: "us_se15" }];
   function eraOf(k) { return ERAS.filter(function (e) { return e.k === k; })[0] || ERAS[1]; }
   function eraPool(e) {
     var seen = {}, out = [], A = S._, hid = S.hiddenSet();
     A.seg(e.seg).concat(S.ALL.filter(function (t) { return t.type === "MOVIE" && t.year >= e.a && t.year <= e.b && (t.countries || []).indexOf("US") >= 0; }))
-      .forEach(function (t) { if (!seen[t.id] && !hid[t.id] && (t.avail || []).length && t.year >= e.a && t.year <= e.b && t.type === "MOVIE" && everyday(t)) { seen[t.id] = 1; out.push(t); } });
+      .forEach(function (t) { if (!seen[t.id] && !hid[t.id] && (t.avail || []).length && t.year >= e.a && t.year <= e.b && t.type === "MOVIE" && everyday(t) && american(t)) { seen[t.id] = 1; out.push(t); } });
     return out;
+  }
+  // the American series that started in that era (live-action, real-world)
+  function eraTV(e) {
+    var seen = {}, out = [], hid = S.hiddenSet();
+    S._.seg(e.tv).concat(S.ALL.filter(function (t) { return t.type === "SHOW" && t.year >= e.a && t.year <= e.b && (t.countries || []).indexOf("US") >= 0; }))
+      .forEach(function (t) { var g = t.genres || []; if (!seen[t.id] && !hid[t.id] && (t.avail || []).length && t.type === "SHOW" && t.year >= e.a && t.year <= e.b &&
+        g.indexOf("ani") < 0 && g.indexOf("rly") < 0 && g.indexOf("fml") < 0 && (t.votes || 0) >= 15000) { seen[t.id] = 1; out.push(t); } });
+    return out;
+  }
+  function american(t) {
+    var c = t.countries || []; if (c.indexOf("US") < 0) return false;
+    if (t.otitle && !/^[\x00-\x7f]+$/.test(t.otitle)) return false;            // original title in another language
+    return !c.some(function (x) { return ["IN", "KR", "JP", "LB", "FR", "ES", "DE", "IT", "CN", "MX", "IR", "AU", "NZ"].indexOf(x) >= 0 && c.length <= 3 && x !== "US" && c.indexOf("GB") < 0 && x !== "CA"; });
   }
   // real-world films: no animation, superheroes, fantasy or sci-fi, and the mega-blockbusters step aside
   function everyday(t) {
     var g = t.genres || [];
     if (g.indexOf("ani") >= 0 || g.indexOf("fnt") >= 0 || g.indexOf("scf") >= 0 || g.indexOf("fml") >= 0) return false;
     if (g.indexOf("act") >= 0 && (t.votes || 0) > 450000) return false;
-    return (t.votes || 0) >= 12000;
+    return (t.votes || 0) >= 9000;
   }
   // "famous but not mega": the films people liked then, not the ones still on every billboard
   function famous(l) { return l.slice().sort(function (a, b) { function sc(t) { var v = t.votes || 0; return (v > 900000 ? 900000 - (v - 900000) : v) * (0.6 + (t.imdb || 6) / 15); } return sc(b) - sc(a); }); }
@@ -313,27 +327,51 @@
   function hasGenre() { var g = [].slice.call(arguments); return function (t) { return (t.genres || []).some(function (x) { return g.indexOf(x) >= 0; }); }; }
   function byVotes(l) { return l.slice().sort(function (a, b) { return (b.votes || 0) - (a.votes || 0); }); }
   function eraRows(e) {
-    var P = eraPool(e), R = S.R, Q = S._.byQ;
-    var nyc = /new york|manhattan|brooklyn|\bnyc\b|queens|harlem|the bronx|wall street/i;
+    var notDoc = function (t) { return !hasGenre("doc")(t) && !/stand-?up|comedy special/i.test(t.desc || ""); };
+    var P = eraPool(e), TV = eraTV(e), R = S.R, Q = S._.byQ;
+    var nyc = /new york|manhattan|brooklyn|\bnyc\b|queens|harlem|the bronx|wall street|upper east side/i;
     var twenties = /college|fraternity|\bfrat\b|sorority|roommate|twenty-?something|bachelor|best friends?|wedding|graduat|dating|one night|single (guy|girl|woman|man)|party/i;
-    var teen = /high school|teenag|\bteen\b|prom\b|senior year|homecoming/i;
-    var grit = /coach|team|true story|rescue|military|soldier|marine|coast guard|underdog|firefight|based on the (true|real)/i;
-    return [R("Everyone Watched These", famous(P), null, "the films that defined the era"),
-      R("New York State of Mind", Q(P.filter(about(nyc))), null, "city lights, small apartments, big plans"),
+    var teen = /high school|teenag|\bteen\b|prom\b|senior year|homecoming|coming[- ]of[- ]age/i;
+    var grit = /\bcoach|underdog|championship|\bboxer|\bboxing|olympic|\bleague\b|wrestl|\bsprint/i;
+    var truth = /true story|based on the (true|real)|real[- ]life|inspired by (the )?true|biopic|memoir/i;
+    var heist = /\bheist|\brobbery|bank job|\bcon (man|men|artist)|\bthie(f|ves)\b|\bspy\b|\bspies\b|\bcia\b|espionage|undercover|safecracker/i;
+    var road = /road trip|cross-country|\bvacation|spring break|summer (break|camp|vacation|job)|bachelor party|las vegas|\bvegas\b|on the road/i;
+    var holiday = /christmas|thanksgiving|holiday|new year|santa/i;
+    var town = /small[- ]town|hometown|suburb|midwest|rural|farm town|quiet town/i;
+    var rows = [];
+    // made for you: the era, ordered by what you like
+    var T = S.taste();
+    if (T.n >= 8) rows.push(R("Your " + e.label + " Picks", P.slice().sort(function (a, b) { return S.tasteScore(b, T) - S.tasteScore(a, T); }), null, "ordered by what you like"));
+    rows.push(R("Everyone Watched These", famous(P), null, "the films that defined the era"),
+      R("New York State of Mind", Q(P.concat(TV).filter(about(nyc))), null, "city lights, small apartments, big plans"),
       R("Twenty-Somethings", famous(P.filter(about(twenties)).filter(hasGenre("cmy", "rma", "drm"))), null, "friends, bad decisions, figuring it out"),
+      R("Binge the Era", famous(TV), null, "the shows everyone talked about at school or work"),
       R("Crime, Guilt & Rain", Q(P.filter(hasGenre("crm", "trl")).filter(function (t) { return (t.imdb || 0) >= 6.8; })), null, "grey skies and hard choices"),
-      R("Teen Years", famous(P.filter(about(teen))), null, "lockers, parties, one big night"),
-      R("Heart & Grit", Q(P.filter(function (t) { return about(grit)(t) || hasGenre("spt", "war")(t); })), null, "true stories and second chances"),
-      R("Date-Night Rom-Coms", famous(P.filter(hasGenre("rma"))), null),
+      R("Teen Years", famous(P.filter(about(teen)).filter(hasGenre("cmy", "rma", "drm")).filter(function (t) { return !hasGenre("hrr", "trl", "crm")(t); })), null, "lockers, parties, one big night"),
+      R("Date-Night Rom-Coms", famous(P.filter(hasGenre("rma"))), null, "the ones you'd rewatch on a rainy Sunday"),
+      R("Heists, Cons & Spies", famous(P.filter(about(heist)).filter(hasGenre("crm", "trl", "act", "cmy"))), null, "the plan always goes wrong"),
+      R("Road Trips & Summers", famous(P.filter(about(road)).filter(function (t) { return !hasGenre("hrr", "war")(t); })), null, "windows down, no plan"),
+      R("Underdogs", Q(P.filter(function (t) { return (about(grit)(t) && hasGenre("drm", "cmy", "spt")(t)) || hasGenre("spt")(t); })), null, "nobody believed in them"),
+      R("True Stories", Q(P.filter(about(truth))), null, "it really happened"),
+      R("Small-Town America", Q(P.filter(about(town)).filter(function (t) { return !hasGenre("hrr")(t); })), null, "porches, secrets, one main street"),
       R("Laugh Out Loud", famous(P.filter(hasGenre("cmy")).filter(function (t) { return !hasGenre("rma")(t); })), null),
-      R("Forgotten Gems", Q(P.filter(function (t) { return (t.imdb || 0) >= 7 && t.votes >= 15000 && t.votes <= 160000; })), null, "loved then, quietly buried since")];
+      R("Cult Favourites", Q(P.filter(notDoc).filter(function (t) { return (t.imdb || 0) >= 7.3 && t.votes >= 60000 && t.votes <= 320000; })), null, "the ones friends kept telling you about"),
+      R("Holiday Comfort", famous(P.filter(about(holiday))), null, "blankets and hot chocolate", 4),
+      R("Forgotten Gems", Q(P.filter(notDoc).filter(function (t) { return (t.imdb || 0) >= 7 && t.votes >= 9000 && t.votes <= 160000; })), null, "loved then, quietly buried since"));
+    return rows;
   }
   S.SECTIONS.throwback = function () { return eraRows(eraOf(S.pref("era", "e10"))); };
   function eraBar() {
     var e = eraOf(S.pref("era", "e10")), b = h("div", "erabar");
     b.innerHTML = '<div class="eras">' + ERAS.map(function (x) { return '<button class="' + (x.k === e.k ? "on" : "") + '" data-era="' + x.k + '">' + x.label + "</button>"; }).join("") +
-      '</div><div class="eratag">' + esc(e.tag) + "</div>";
+      '</div><div class="eratag">' + esc(e.tag) + '</div><button class="roulette" data-roulette="' + e.k + '">' + G.dice + "<span>Throwback Roulette<small>one great " + e.label + " pick, chosen for you</small></span></button>";
+    document.documentElement.dataset.era = e.k;
     return b;
+  }
+  function roulette(k) {
+    var e = eraOf(k), P = eraPool(e).filter(function (t) { return (t.imdb || 0) >= 6.6; }), T = S.taste();
+    var l = P.map(function (t) { return { t: t, s: (T.n >= 5 ? S.tasteScore(t, T) : 0) + (t.imdb || 6) * 3 + Math.random() * 14 }; }).sort(function (a, b) { return b.s - a.s; });
+    var pick = l[0] && l[0].t; if (pick) { buzz(); openDetail(pick.id); }
   }
   // one small doorway on Home (a different era each day), so Home never gets crowded
   function throwbackTeaser() {
@@ -1060,7 +1098,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -1092,6 +1130,7 @@
     if (D.season) { closeSheet(); return loadEpisodes(curT, $("detail").querySelector(".dsect"), +D.season); }
     if (el.classList.contains("ep") && curT) { var b2 = el.closest(".dsect"); playEp(curT, el._ep); setTimeout(function () { if (curT && b2) loadEpisodes(curT, b2, el._ep.s); }, 800); return; }
     if (D.tab) { closeSheet(); closeDetail(); if (D.tab === tab && tab === "home" && sec !== "home") return show("home", "home"); if (D.tab === tab) { $("view").scrollTo({ top: 0, behavior: "smooth" }); return; } return show(D.tab, null, null, true); }
+    if (D.roulette) return roulette(D.roulette);
     if (D.era) { setPref("era", D.era); buzz(); closeSheet(); closeDetail(); return show("home", "throwback"); }
     if (D.go) { closeSheet(); closeDetail(); return show("home", D.go); }
     if (D.sheet === "apps") return appsSheet();
@@ -1177,7 +1216,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v17 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v18 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });

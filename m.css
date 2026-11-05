@@ -593,3 +593,21 @@ html:not(.fit) #view{bottom:auto;height:max(100%,100vh);}
 .fixq{margin:-4px 16px 16px;font-size:13.5px;color:var(--mut);line-height:1.5;}
 .fixq b{color:#fff;font-style:italic;}
 .fixq button{display:block;color:#7fb2ff;font-size:13px;margin-top:2px;}
+
+/* ===== Throwback v2 ===== */
+.roulette{display:flex;align-items:center;gap:12px;width:100%;margin-top:14px;padding:11px 14px;border-radius:12px;text-align:left;
+  background:linear-gradient(135deg,rgba(243,164,107,.18),rgba(229,9,20,.12));border:1px solid rgba(243,164,107,.3);}
+.roulette svg{width:26px;height:26px;color:var(--amber);flex:none;}
+.roulette span{font-size:15px;font-weight:700;}
+.roulette small{display:block;font-size:12px;color:var(--mut);font-weight:500;margin-top:1px;}
+.roulette:active{transform:scale(.98);}
+/* each era gets its own photo tone on posters and the billboard */
+html[data-era="e05"] #view .pc img.p,html[data-era="e05"] #view .hero img.p{filter:sepia(.22) saturate(.92) contrast(1.04) brightness(.98);}
+html[data-era="e10"] #view .pc img.p,html[data-era="e10"] #view .hero img.p{filter:saturate(1.12) contrast(.95) brightness(1.04) hue-rotate(-6deg);}
+html[data-era="e15"] #view .pc img.p,html[data-era="e15"] #view .hero img.p{filter:saturate(1.08) contrast(1.06);}
+html[data-era="e05"] .eratag{color:#e8c48f;}
+html[data-era="e10"] .eratag{color:#f2a3c4;}
+html[data-era="e15"] .eratag{color:#7fd3d0;}
+html[data-era="e05"] .eras button.on{background:#f1dfc2;}
+html[data-era="e10"] .eras button.on{background:#f7d9e6;}
+html[data-era="e15"] .eras button.on{background:#d5f1ef;}
