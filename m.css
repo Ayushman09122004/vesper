@@ -577,3 +577,14 @@ html:not(.fit) #view{bottom:auto;height:max(100%,100vh);}
 .dtop{position:fixed;left:0;right:0;top:0;height:var(--st);background:#000;z-index:2;pointer-events:none;}
 .dbar{top:var(--st);height:50px;}
 .dart .g{background:linear-gradient(transparent 60%,var(--bg));}
+
+/* ===== v16: speed & 60fps ===== */
+#amb{will-change:opacity;contain:strict;}
+#amb img{will-change:opacity;}
+.pc img.p{transition:opacity .22s ease-out;}
+.pc,.tc,.wide{contain:layout paint style;}
+.rail,.htrack{will-change:scroll-position;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.pc{background:linear-gradient(160deg,#1b1b25,#121219);}
+.hero img.p{transition:opacity .45s var(--e);}
+#tabs,#top{will-change:transform;transform:translateZ(0);}
+@media (prefers-reduced-motion: reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important;}}
