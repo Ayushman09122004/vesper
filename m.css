@@ -459,3 +459,23 @@ html.fit .tacts{top:calc(var(--H) - var(--sb) - 20px - 110px);bottom:auto;}
 /* belt and braces: on iOS home-screen apps 100vh is the true screen height even when % heights come up short */
 html,body{min-height:100vh;}
 html:not(.fit) #view{bottom:auto;height:max(100%,100vh);}
+
+/* ===== Dynamic Island: a soft band under the clock so scrolled content never fights the island or status bar ===== */
+#isl{position:fixed;left:0;right:0;top:0;height:calc(var(--st) + 14px);z-index:95;pointer-events:none;opacity:0;transition:opacity .25s;
+  background:linear-gradient(rgba(6,6,12,.88) 0%,rgba(6,6,12,.6) 60%,rgba(6,6,12,0) 100%);}
+#isl.on{opacity:1;}
+/* details: the close button sits beside the island, below the clock row */
+.dclose{top:calc(var(--st) + 8px);z-index:96;}
+/* trailer player bar clears the island */
+.trl .tbar{top:calc(var(--st) + 8px);}
+/* Who's watching and sheets never reach the island */
+#who{padding-top:calc(var(--st) + 30px);}
+#sheet .card{max-height:calc(100% - var(--st) - 20px);}
+/* weather page: the sky text starts well below the island */
+.sky{height:calc(var(--st) + 290px);}
+/* details scrolled: a glass bar under the island with the show's name (like iOS large titles collapsing) */
+.dbar{position:fixed;left:0;right:0;top:0;height:calc(var(--st) + 50px);z-index:2;pointer-events:none;opacity:0;transition:opacity .22s;
+  background:rgba(14,14,20,.74);-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);border-bottom:.5px solid rgba(255,255,255,.08);}
+.dbar.bar{opacity:1;}
+.dbar span{position:absolute;left:60px;right:60px;bottom:15px;text-align:center;font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dclose{top:calc(var(--st) + 8px);z-index:3;}

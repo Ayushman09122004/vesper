@@ -101,8 +101,7 @@
   }
   var io = null;
   function addRows(box, rows) {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (en) { en.forEach(function (e) { if (e.isIntersecting) { e.target._fill(); io.unobserve(e.target); } }); }, { root: $("view"), rootMargin: "600px 0px" });
+    if (!io) io = new IntersectionObserver(function (en) { en.forEach(function (e) { if (e.isIntersecting) { e.target._fill(); io.unobserve(e.target); } }); }, { root: $("view"), rootMargin: "600px 0px" });
     rows.forEach(function (r, i) { var el = rowEl(r), f = el._fill; el._fill = function () { try { f(); } catch (e) { console.error(e); el.remove(); } };   // one bad row never breaks the page
       box.appendChild(el); if (i < 3) el._fill(); else io.observe(el); });
   }
@@ -166,7 +165,13 @@
     $("tabs").innerHTML = T.map(function (x) { return '<button data-tab="' + x[0] + '" class="' + (x[0] === tab ? "on" : "") + '">' + x[2] + "<span>" + x[1] + "</span></button>"; }).join("");
   }
   var lastY = 0;
+  function island() {
+    var d = $("detail"), on = d.classList.contains("on") ? d.scrollTop > 120 : tab === "weather" && $("view").scrollTop > 40;
+    var I = $("isl"), db = d.querySelector(".dbar"), bar = d.classList.contains("on") && d.scrollTop > 260;
+    I.classList.toggle("on", (on && !bar) || !!$("trl")); if (db) db.classList.toggle("bar", bar);
+  }
   function onScroll() {
+    island();
     var y = $("view").scrollTop, top = $("top");
     top.classList.toggle("solid", y > 30); $("amb").style.opacity = Math.max(0, 1 - y / 700);
     if (y > 160 && y > lastY + 4) top.classList.add("tuck"); else if (y < lastY - 6 || y < 120) top.classList.remove("tuck");
@@ -180,6 +185,7 @@
     tab = t; if (t === "home") sec = s || "home"; arg = a == null ? null : a;
     header(); tabs();
     var page = h("div", "page" + (t === "weather" ? " flush" : t === "home" ? "" : " short"));
+    if (io) { io.disconnect(); io = null; }   // one loader per page, shared by every group of rows on it
     v.textContent = ""; v.appendChild(page);
     if (t !== "home") setAmb(null);
     if (t === "home") renderSection(page, sec);
@@ -379,7 +385,7 @@
     shelf("Shows & Films You've Liked", likes, true, "likes");
     shelf("Not for Me", no, false, "dislikes");
     if (!mine.length && !likes.length && !recent.length)
-      page.appendChild(h("div", "empty", "<b>Your list is empty</b>Tap <b>+ My List</b> on anything you want to watch, or press and hold a poster."));
+      page.appendChild(h("div", "empty", "<b>Your list is empty</b>Tap + My List on anything you want to watch, or press and hold a poster."));
   }
   // ---------- sheets ----------
   function sheet(html, after) {
@@ -449,7 +455,7 @@
     var plays = best ? '<button class="btn play big" data-play="' + t.id + '" data-app="' + best + '">' + G.play + 'Play<img src="' + LOGO[best] + '"></button>'
       : '<div class="soonbox">' + G.bell + (soon ? "Coming " + new Date(soon.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + (soon.app ? " on " + LABEL[soon.app] : "") : "Not streaming on your apps right now") + "</div>";
     var cast = (t.cast || []).slice(0, 8), dirs = (t.dirs || []).slice(0, 2);
-    d.innerHTML = '<button class="dclose" data-close>' + G.x + '</button><div class="dart"><img src="' + S.bd(t, "s1920") + '"><div class="g"></div></div><div class="dbody">' +
+    d.innerHTML = '<div class="dbar"><span>' + esc(t.title) + '</span></div><button class="dclose" data-close>' + G.x + '</button><div class="dart"><img src="' + S.bd(t, "s1920") + '"><div class="g"></div></div><div class="dbody">' +
       tagLine(t) + "<h2>" + esc(t.title) + '</h2><div class="dmeta">' + meta + "</div>" +
       (rank ? '<div class="drank"><span class="t10">TOP<br>10</span>' + esc(rank) + "</div>" : arr ? '<div class="drank new">' + (arr.season > 1 ? "New season just added" : "Just added") + "</div>" : "") +
       plays + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
@@ -477,7 +483,7 @@
     var d = $("detail"), a = d.querySelector(".acts"); if (!a || !curT) return; a.outerHTML = actsHTML(curT);
     var w = d.querySelector(".btn.wide"); if (w) w.innerHTML = S.inList("mylist", curT.id) ? G.check + "In My List" : G.plus + "My List";
   }
-  function closeDetail(fromPop) { var d = $("detail"); if (!d.classList.contains("on")) return; stopPreview(); d.classList.remove("on"); curT = null; if (!fromPop && history.state && history.state.d) history.back(); }
+  function closeDetail(fromPop) { var d = $("detail"); if (!d.classList.contains("on")) return; stopPreview(); d.classList.remove("on"); setTimeout(island, 0); curT = null; if (!fromPop && history.state && history.state.d) history.back(); }
   function dtab(which) {
     var t = curT, box = $("detail").querySelector(".dsect"); if (!t || !box) return;
     qa(".dtabs button", $("detail")).forEach(function (b) { b.classList.toggle("on", b.dataset.dt === which); });
@@ -556,9 +562,9 @@
       '?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
       '<div class="tacts">' + (S.pickApp(t) ? '<button class="btn play" data-play="' + t.id + '">' + G.play + "Play on " + LABEL[S.pickApp(t)] + "</button>" : "") +
       '<button class="btn wide" data-yt="' + id + '">Open in YouTube</button></div>';
-    document.body.appendChild(o); requestAnimationFrame(function () { o.classList.add("on"); });
+    document.body.appendChild(o); requestAnimationFrame(function () { o.classList.add("on"); }); island();
   }
-  function closeTrailer() { var o = $("trl"); if (o) { o.classList.remove("on"); setTimeout(function () { o.remove(); }, 300); } }
+  function closeTrailer() { var o = $("trl"); if (o) { o.classList.remove("on"); setTimeout(function () { o.remove(); island(); }, 300); } }
   // details: the trailer starts silently at the top, like Netflix
   var prevT = null;
   function startPreview(t) {
@@ -649,6 +655,7 @@
     if (id) { var src = el.closest(".pc,.wide,.hero,.nh .art,.li") || el; fromRect = src.getBoundingClientRect(); closeSheet(); openDetail(id); }
   });
   window.addEventListener("popstate", function () { closeDetail(true); });
+  $("detail").addEventListener("scroll", island, { passive: true });
 
   // press and hold any poster: quick actions, like iOS
   (function () {
@@ -703,7 +710,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v9 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v10 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });

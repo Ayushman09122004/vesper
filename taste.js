@@ -13,7 +13,7 @@
   V.profiles = function () { return V.state.profiles || []; };
   V.profile = function () { var id = V.state.profile; return V.profiles().filter(function (p) { return p.id === id; })[0] || null; };
   V.addProfile = function (name) {
-    var ps = V.profiles().slice(), id = "p" + Date.now().toString(36), first = !ps.length;
+    var ps = V.profiles().slice(), id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), first = !ps.length;
     ps.push({ id: id, name: name, hue: HUES[ps.length % HUES.length] });
     V.setRaw("profiles", ps);
     // the first person keeps everything Vesper already learned before profiles existed
