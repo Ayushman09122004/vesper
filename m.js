@@ -421,7 +421,7 @@
         return '<button class="opt' + (fav === x[0] ? " on" : "") + '" data-fav="' + x[0] + '">' + (LOGO[x[0]] ? '<img src="' + LOGO[x[0]] + '">' : '<span style="flex:none;width:28px"></span>') + "<span>" + x[1] + "</span></button>"; }).join("") +
       '<h4>Weather</h4><button class="opt" data-sheet="place">' + G.pin + "<span>" + esc(S.place().name) + "</span><small>Change</small></button>" +
       '<h4>History</h4><button class="opt red" data-clear><span>Forget what I opened and liked</span></button>' +
-      '<div class="foot">Show list updated ' + (gen ? gen.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "—") + " · " + S.ALL.length + " titles across Netflix, Prime Video, JioHotstar, Apple TV+ and Crunchyroll.<br>Your lists stay on this iPhone.</div>");
+      '<div class="foot">Show list updated ' + (gen ? gen.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "—") + " · " + S.ALL.length + " titles across Netflix, Prime Video, JioHotstar, Apple TV+ and Crunchyroll.<br>Your lists stay on this iPhone.<br><span style=\"opacity:.6\">" + displayInfo() + "</span></div>");
   }
   function peopleSheet() {
     var ps = S.profiles(), cur = S.state.profile;
@@ -694,9 +694,17 @@
   // fill the whole screen: measure the strip iOS leaves out at the bottom of home-screen apps
   function fitScreen() {
     var standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
-    var tall = Math.max(screen.height, screen.width), portrait = innerHeight > innerWidth;
-    var gap = standalone && portrait ? Math.max(0, Math.min(80, tall - innerHeight)) : 0;
-    document.documentElement.style.setProperty("--gap", gap + "px");
+    var portrait = innerHeight > innerWidth, H = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
+    var root = document.documentElement;
+    root.style.setProperty("--gap", "0px");
+    if (standalone && H >= innerHeight) { root.classList.add("fit"); root.style.setProperty("--H", H + "px"); }
+    else { root.classList.remove("fit"); root.style.removeProperty("--H"); }
+  }
+  function displayInfo() {
+    var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
+    document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
+    return "Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+      " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
 

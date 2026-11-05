@@ -447,3 +447,12 @@ html,body{height:calc(100% + var(--gap));}
 #toast{bottom:calc(var(--sb) + 92px - var(--gap));}
 .coach{bottom:calc(var(--sb) + 90px - var(--gap));}
 .tacts{bottom:calc(var(--sb) + 20px - var(--gap));}
+
+/* ===== full-screen v2: in home-screen mode, size everything to the phone's real screen height (--H) ===== */
+html.fit,html.fit body{height:var(--H);min-height:var(--H);overflow:hidden;}
+html.fit #view,html.fit #detail,html.fit #sheet,html.fit #boot,html.fit #who,html.fit .trl{top:0;bottom:auto;height:var(--H);}
+html.fit #amb{height:calc(var(--H) * .92);}
+html.fit #tabs{top:calc(var(--H) - var(--sb) * .5 - 4px - 64px);bottom:auto;}
+html.fit #toast{top:calc(var(--H) - var(--sb) - 92px - 40px);bottom:auto;}
+html.fit .coach{display:none;}
+html.fit .tacts{top:calc(var(--H) - var(--sb) - 20px - 110px);bottom:auto;}
