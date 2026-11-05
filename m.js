@@ -28,7 +28,17 @@
     share: I('<path d="M12 3.5v12M7.5 8L12 3.5 16.5 8"/><path d="M5.5 12.5v6.5h13v-6.5"/>'),
     dice: I('<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01"/>', 2.4),
     pin: I('<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
-    back: I('<path d="M15 5l-7 7 7 7"/>', 2.4)
+    back: I('<path d="M15 5l-7 7 7 7"/>', 2.4),
+    r: I('<path d="M9 5l7 7-7 7"/>', 2.2),
+    caret: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 9.5h12l-6 6.5z"/></svg>',
+    film: I('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/>'),
+    muted: I('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
+    sound: I('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>'),
+    menu: I('<path d="M4 7h16M4 12h16M4 17h16"/>', 2),
+    person: I('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.9-3.6 3.6-5.4 7-5.4s6.1 1.8 7 5.4"/>'),
+    send: I('<path d="M21 3.5L10.5 13.5M21 3.5l-6.5 17-4-7-7-4z"/>'),
+    bell: I('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+    upOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10.5v9H4.5v-9zM8.5 10.3l3.7-6c1.4 0 2.3 1 2.1 2.3l-.6 3.2h5a1.9 1.9 0 0 1 1.9 2.3l-1.4 6.2a1.9 1.9 0 0 1-1.9 1.5H8.5z"/></svg>'
   };
 
   // ---------- state ----------
@@ -56,7 +66,7 @@
   }
   function poster(t) {
     var c = h("div", "pc"); c.dataset.id = t.id;
-    var src = S.po(t, "s332"), lg = t.orig ? '<img class="lg" src="' + LOGO[t.orig] + '">' : "";
+    var src = S.po(t, "s592"), lg = t.orig ? '<img class="lg" src="' + LOGO[t.orig] + '">' : "";
     c.innerHTML = (src ? '<img class="p" loading="lazy" decoding="async" src="' + src + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' : "") +
       '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t);
     if (src) { var im = c.querySelector("img.p"); im.addEventListener("error", function () { c.querySelector(".nt").style.opacity = 1; }); }
@@ -66,7 +76,7 @@
   function wideCard(t) {
     var c = h("div", "wide"); c.dataset.id = t.id; c.style.setProperty("--gh", S.glowHue(t));
     var a = t.orig || S.pickApp(t);
-    c.innerHTML = '<div class="art"><img decoding="async" src="' + S.bd(t, "s640") + '" onload="this.classList.add(\'ok\')"><div class="g"></div>' +
+    c.innerHTML = '<div class="art"><img decoding="async" loading="lazy" src="' + S.bd(t, "s1440") + '" onload="this.classList.add(\'ok\')"><div class="g"></div>' +
       (a ? '<img class="lg" src="' + LOGO[a] + '">' : "") + '<div class="nm">' + esc(t.title) + '</div></div><div class="vibe">' + S.vibes(t).map(esc).join(" · ") + "</div>";
     return c;
   }
@@ -129,16 +139,24 @@
       var inSec = sec !== "home";
       var chips = inSec
         ? '<button class="chip x" data-go="home">' + G.x + '</button><button class="chip on" data-sheet="' + (sec.indexOf("app:") === 0 ? "apps" : CATS.some(function (c) { return c[0] === sec; }) ? "cats" : "") + '">' +
-          (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : "") + esc(SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.down) + "</button>" +
+          (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : "") + esc(SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.caret) + "</button>" +
           (sec === "shows" ? '<button class="chip" data-go="movies">Films</button>' : sec === "movies" ? '<button class="chip" data-go="shows">Series</button>' : "")
-        : '<button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-sheet="apps">Your Apps' + G.down + '</button><button class="chip" data-sheet="cats">Categories' + G.down + "</button>";
-      top.innerHTML = '<div class="hrow"><img class="logo" src="icons/icon-180.png" alt=""><h1>' + (p ? "For " + esc(p.name) : "Vesper") + "</h1>" +
+        : '<button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
+      var title = inSec ? esc(SECT_NAMES[sec] || "") : p ? "For " + esc(p.name) : "Home";
+      top.innerHTML = '<div class="hrow"><img class="logo" src="icons/icon-180.png" alt=""><h1>' + title + "</h1>" +
         '<button class="hbtn" data-pick title="Pick for me">' + G.dice + '</button><button class="hbtn" data-tab="search">' + G.search + "</button></div><div class=\"chips\">" + chips + "</div>";
     } else {
       var T = { "new": "New & Hot", weather: "Weather", search: "Search", mylist: "My Vesper" }[tab];
-      top.innerHTML = '<div class="hrow"><h1>' + T + "</h1>" + "" + "</div>";
+      top.innerHTML = '<div class="hrow"><h1>' + T + "</h1>" + (tab === "mylist" ? '<button class="hbtn" data-tab="search">' + G.search + '</button><button class="hbtn" data-sheet="me">' + G.menu + "</button>" : "") + "</div>";
     }
     top.style.display = tab === "weather" ? "none" : "";
+  }
+  // the page glows with the colours of the billboard poster (a softly blurred copy of it, like Netflix)
+  function setAmb(t) {
+    var a = $("amb"); if (!t) { a.classList.remove("on"); return; }
+    var src = S.po(t, "s332"); if (a._src === src) { a.classList.add("on"); return; }
+    a._src = src; var im = new Image(); im.decoding = "async"; im.src = src;
+    im.onload = function () { a.innerHTML = ""; a.appendChild(im); a.appendChild(h("div", "fade")); requestAnimationFrame(function () { a.classList.add("on"); }); };
   }
   function tabs() {
     var p = S.profile();
@@ -146,7 +164,7 @@
       ["mylist", "My Vesper", p ? S.avatar(p) : G.list]];
     $("tabs").innerHTML = T.map(function (x) { return '<button data-tab="' + x[0] + '" class="' + (x[0] === tab ? "on" : "") + '">' + x[2] + "<span>" + x[1] + "</span></button>"; }).join("");
   }
-  function onScroll() { $("top").classList.toggle("solid", $("view").scrollTop > 30); }
+  function onScroll() { var y = $("view").scrollTop; $("top").classList.toggle("solid", y > 30); $("amb").style.opacity = Math.max(0, 1 - y / 700); }
 
   // ---------- navigation ----------
   function show(t, s, a, keepY) {
@@ -156,6 +174,7 @@
     header(); tabs();
     var page = h("div", "page" + (t === "weather" ? " flush" : t === "home" ? "" : " short"));
     v.textContent = ""; v.appendChild(page);
+    if (t !== "home") setAmb(null);
     if (t === "home") renderSection(page, sec);
     else if (t === "new") renderNew(page);
     else if (t === "weather") renderWeather(page);
@@ -167,24 +186,35 @@
   function rerender() { show(tab, sec, arg, true); }
 
   // ---------- Home and sections ----------
+  function rankOf(t) { var tp = S.CAT.top10 || {}, i = (tp.shows || []).indexOf(t.id); if (i >= 0) return "#" + (i + 1) + " in Series Today"; i = (tp.movies || []).indexOf(t.id); return i >= 0 ? "#" + (i + 1) + " in Films Today" : null; }
+  function genreWords(t) {
+    var w = S.vibes(t).slice(0, 2), g = (t.genres || []).filter(function (x) { return x !== "drm"; })[0] || (t.genres || [])[0], gn = g && S.GENRES[g];
+    if (gn && w.length < 3) w.push(gn.replace(" & Animation", ""));
+    if ((t.imdb || 0) >= 8.2 && w.length < 3) w.push("Critically Acclaimed");
+    return w.slice(0, 3);
+  }
   function heroEl(s) {
     var hid = S.hiddenSet(), list = S.heroFor(s).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
     var t;
     if (s === "home") { var last = S.list("lastHero")[0], k = list.findIndex(function (x) { return x.id === last; }); t = list[(k + 1) % list.length]; S.set("lastHero", [t.id]); }
     else t = list[Math.floor(Math.random() * Math.min(list.length, 5))];
-    var wn = S.wxNow(), extra = s === "home" && wn && S.wxRow(wn.k, 30).indexOf(t) >= 0 ? wn.hero : null;
+    var wn = S.wxNow(), arr = S.arrivalOf(t);
+    var kicker = s === "home" && wn && S.wxRow(wn.k, 30).indexOf(t) >= 0 ? wn.hero : arr ? (arr.season > 1 ? "New Season" : "Just Added") : rankOf(t);
     var el = h("section", "hero"); el.dataset.id = t.id; el.style.setProperty("--gh", S.glowHue(t));
-    var inL = S.inList("mylist", t.id);
-    el.innerHTML = '<img class="p" decoding="async" src="' + S.po(t, "s718") + '" onload="this.classList.add(\'ok\')"><div class="sh"></div><div class="inf">' + tagLine(t, extra) +
-      '<div class="nm">' + esc(t.title) + '</div><div class="line">' + heroLine(t) + "</div>" +
+    var inL = S.inList("mylist", t.id), a = t.orig || S.pickApp(t);
+    el.innerHTML = '<img class="p" decoding="async" src="' + S.po(t, "s718") + '" onload="this.classList.add(\'ok\')"><div class="sh"></div>' +
+      (a ? '<img class="svc" src="' + LOGO[a] + '">' : "") + '<div class="inf">' +
+      (kicker ? '<div class="kick">' + esc(kicker) + "</div>" : "") + '<div class="nm">' + esc(t.title) + '</div><div class="line">' +
+      genreWords(t).map(esc).join('<i class="dot"></i>') + "</div>" +
       '<div class="btns"><button class="btn play" data-play="' + t.id + '">' + G.play + (S.pickApp(t) ? "Play" : "Soon") + '</button><button class="btn ghost" data-list="' + t.id + '">' + (inL ? G.check : G.plus) + "My List</button></div></div>";
+    setAmb(t);
     return el;
   }
   function renderSection(page, s) {
     var rows = S.finalize((S.SECTIONS[s] || S.SECTIONS.home)());
     if (s !== "mylist" && s !== "new") rows = S.freshen(rows, s);
     if (s === "home" && !noted) { noted = true; S.noteShown(rows); }
-    var hero = heroEl(s); if (hero) page.appendChild(hero);
+    var hero = heroEl(s); if (hero) page.appendChild(hero); else setAmb(null);
     if (!rows.length) page.appendChild(h("div", "empty", "<b>Nothing here yet</b>The show list is still loading."));
     addRows(page, rows);
   }
@@ -205,8 +235,9 @@
       var when = m === "soon" && d ? "Coming " + d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + (a ? " · " + LABEL[a] : "")
         : arr ? (arr.season > 1 ? "New season · " : "Now streaming · ") + (LABEL[arr.app] || "") : a ? "On " + LABEL[a] : "";
       var el = h("div", "nh"); el.dataset.id = t.id;
-      el.innerHTML = '<div class="dt">' + left + '</div><div class="bd"><div class="art"><img loading="lazy" src="' + S.bd(t, "s640") + '">' + (a && LOGO[a] ? '<img class="lg" src="' + LOGO[a] + '">' : "") +
-        '</div><div class="nm">' + esc(t.title) + '</div><div class="when">' + esc(when) + "</div><p>" + esc(t.desc || "") + '</p><div class="gn">' + (t.genres || []).slice(0, 3).map(function (g) { return S.GENRES[g] || g; }).join(" · ") + "</div></div>";
+      el.innerHTML = '<div class="dt">' + left + '</div><div class="bd"><div class="art"><img loading="lazy" decoding="async" src="' + S.bd(t, "s1440") + '">' + (a && LOGO[a] ? '<img class="lg" src="' + LOGO[a] + '">' : "") +
+        '<span class="pb" data-trailer="' + t.id + '">' + G.play + '</span></div><div class="nhb"><button data-trailer="' + t.id + '">' + G.film + "Trailer</button>" +
+        '<button data-list="' + t.id + '">' + (S.inList("mylist", t.id) ? G.check : G.plus) + "My List</button></div>" + '<div class="nm">' + esc(t.title) + '</div><div class="when">' + esc(when) + "</div><p>" + esc(t.desc || "") + '</p><div class="gn">' + (t.genres || []).slice(0, 3).map(function (g) { return S.GENRES[g] || g; }).join(" · ") + "</div></div>";
       page.appendChild(el);
     });
   }
@@ -292,18 +323,36 @@
 
   // ---------- My Vesper ----------
   function renderMine(page) {
-    var p = S.profile();
-    var me = h("div", "li"); me.style.cssText = "padding:4px 16px 22px";
-    me.innerHTML = (p ? S.avatar(p).replace('class="ava ', 'style="width:52px;height:52px;font-size:22px;--h:' + p.hue + '" class="ava ') : "") +
-      '<div class="tx" style="font-size:19px;font-weight:700">' + (p ? esc(p.name) : "Your Vesper") + "<small>" + (S.profiles().length > 1 ? "Tap to switch profile" : "Profiles, weather, favourite app") + "</small></div>" +
-      '<button class="chip" data-sheet="me">Settings</button>';
-    me.dataset.sheet = "me";
+    var p = S.profile(), many = S.profiles().length > 1;
+    var me = h("div", "mehead"); me.dataset.sheet = "people";
+    me.innerHTML = (p ? S.avatar(p) : '<div class="ava" style="--h:265">' + G.person + "</div>") + "<b>" + (p ? esc(p.name) : "Add your name") + G.caret + "</b>";
     page.appendChild(me);
-    var rows = S.finalize(S.SECTIONS.mylist());
-    if (!rows.length) { page.appendChild(h("div", "empty", "<b>Your list is empty</b>Tap + My List on any title and it waits for you here.")); return; }
-    addRows(page, rows);
+    var L = S.wxLive(), fav = S.pref("app", "auto");
+    var opts = h("div", "mlist");
+    opts.innerHTML = '<button class="mrow" data-sheet="place"><i style="--c:#3b82f6">' + G.weather + "</i><span>Weather mood<small>" + (L ? esc(S.wxWords(L.code)) + " · " + Math.round(L.temp) + "° in " : "From ") + esc(S.place().name) + "</small></span>" + G.r + "</button>" +
+      '<button class="mrow" data-sheet="me"><i style="--c:#e50914">' + G.play + "</i><span>Play on first<small>" + (fav === "auto" ? "Best available app" : LABEL[fav]) + "</small></span>" + G.r + "</button>" +
+      '<button class="mrow" data-sheet="people"><i style="--c:#8f7cff">' + G.person + "</i><span>Profiles<small>" + (many ? S.profiles().length + " people" : "Add family members") + "</small></span>" + G.r + "</button>";
+    page.appendChild(opts);
+    var likes = S.ids(S.list("likes")), mine = S.ids(S.list("mylist")), recent = S.ids(S.list("recent")), no = S.ids(S.list("dislikes"));
+    function shelf(title, list, share, all) {
+      if (!list.length) return;
+      var row = h("div", "row");
+      row.innerHTML = '<div class="row-h">' + esc(title) + (all ? '<button class="seeall" data-all="' + all + '">See All' + G.r + "</button>" : "") + '</div><div class="rail"></div>';
+      var rail = row.querySelector(".rail");
+      list.slice(0, 20).forEach(function (t) {
+        if (!share) return rail.appendChild(poster(t));
+        var w = h("div", "shc"); w.appendChild(poster(t));
+        w.insertAdjacentHTML("beforeend", '<button data-share="' + t.id + '">' + G.send + "Share</button>"); rail.appendChild(w);
+      });
+      page.appendChild(row);
+    }
+    shelf("Continue Watching", recent, false, "recent");
+    shelf("My List", mine, false, "mylist");
+    shelf("Shows & Films You've Liked", likes, true, "likes");
+    shelf("Not for Me", no, false, "dislikes");
+    if (!mine.length && !likes.length && !recent.length)
+      page.appendChild(h("div", "empty", "<b>Your list is empty</b>Tap <b>+ My List</b> on anything you want to watch, or press and hold a poster."));
   }
-
   // ---------- sheets ----------
   function sheet(html, after) {
     var s = $("sheet");
@@ -346,6 +395,13 @@
       '<h4>History</h4><button class="opt red" data-clear><span>Forget what I opened and liked</span></button>' +
       '<div class="foot">Show list updated ' + (gen ? gen.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "—") + " · " + S.ALL.length + " titles across Netflix, Prime Video, JioHotstar, Apple TV+ and Crunchyroll.<br>Your lists stay on this iPhone.</div>");
   }
+  function peopleSheet() {
+    var ps = S.profiles(), cur = S.state.profile;
+    sheet("<h3>Who's watching?</h3>" + ps.map(function (p) { return '<button class="opt' + (p.id === cur ? " on" : "") + '" data-prof="' + p.id + '">' + S.avatar(p) + "<span>" + esc(p.name) + "</span></button>"; }).join("") +
+      '<button class="opt" data-padd>' + S.avatar(null) + "<span>Add a person</span></button>" +
+      (ps.length ? '<button class="opt" data-pren><span style="padding-left:44px">Rename ' + esc((S.profile() || {}).name || "") + "</span></button>" : "") +
+      (ps.length > 1 ? '<button class="opt red" data-prem><span style="padding-left:44px">Remove ' + esc((S.profile() || {}).name || "") + "</span></button>" : ""));
+  }
   function nameSheet(title, val, done) {
     sheet("<h3>" + esc(title) + '</h3><div class="sheet-in"><input maxlength="18" placeholder="Name" value="' + esc(val || "") + '"></div><div class="sheet-in"><button class="btn play" style="width:100%">Save</button></div>', function (card) {
       var inp = card.querySelector("input"); setTimeout(function () { inp.focus(); }, 350);
@@ -358,31 +414,38 @@
   var curT = null;
   function openDetail(id) {
     var t = S.T[id]; if (!t) return; curT = t; S.markViewed(t.id); buzz();
-    var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t);
-    var others = apps.filter(function (a) { return a !== best; });
-    var plays = best ? '<div class="plays"><button class="btn play" data-play="' + t.id + '" data-app="' + best + '">' + G.play + "Play on " + LABEL[best] + "</button>" +
-      (others.length ? '<div class="also">' + others.map(function (a) { return '<button class="btn" data-play="' + t.id + '" data-app="' + a + '"><img src="' + LOGO[a] + '">' + LABEL[a] + "</button>"; }).join("") + "</div>" : "") + "</div>"
-      : '<div class="soonbox">' + (soon ? "Coming " + new Date(soon.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long" }) + (soon.app ? " on " + LABEL[soon.app] : "") : "Not streaming on your apps right now") + "</div>";
-    var cast = (t.cast || []).slice(0, 5), dirs = (t.dirs || []).slice(0, 2);
-    d.innerHTML = '<button class="dclose" data-close>' + G.x + '</button><div class="dart"><img src="' + S.bd(t, "s1440") + '"><div class="g"></div></div><div class="dbody">' +
-      tagLine(t) + "<h2>" + esc(t.title) + '</h2><div class="line">' + metaLine(t) + "</div>" + plays +
+    var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t), rank = rankOf(t), arr = S.arrivalOf(t);
+    var others = apps.filter(function (a) { return a !== best; }), inL = S.inList("mylist", t.id);
+    var meta = [t.year ? "<span>" + t.year + "</span>" : "", t.cert ? '<span class="box">' + esc(t.cert) + "</span>" : "", "<span>" + esc(S.length(t)) + "</span>", '<span class="box">HD</span>', t.imdb ? '<span class="imdb">IMDb ' + t.imdb.toFixed(1) + "</span>" : ""].filter(Boolean).join("");
+    var plays = best ? '<button class="btn play big" data-play="' + t.id + '" data-app="' + best + '">' + G.play + 'Play<img src="' + LOGO[best] + '"></button>'
+      : '<div class="soonbox">' + G.bell + (soon ? "Coming " + new Date(soon.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + (soon.app ? " on " + LABEL[soon.app] : "") : "Not streaming on your apps right now") + "</div>";
+    var cast = (t.cast || []).slice(0, 8), dirs = (t.dirs || []).slice(0, 2);
+    d.innerHTML = '<button class="dclose" data-close>' + G.x + '</button><div class="dart"><img src="' + S.bd(t, "s1920") + '"><div class="g"></div></div><div class="dbody">' +
+      tagLine(t) + "<h2>" + esc(t.title) + '</h2><div class="dmeta">' + meta + "</div>" +
+      (rank ? '<div class="drank"><span class="t10">TOP<br>10</span>' + esc(rank) + "</div>" : arr ? '<div class="drank new">' + (arr.season > 1 ? "New season just added" : "Just added") + "</div>" : "") +
+      plays + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
+      (others.length ? '<div class="also"><small>Also on</small>' + others.map(function (a) { return '<button data-play="' + t.id + '" data-app="' + a + '"><img src="' + LOGO[a] + '">' + LABEL[a] + "</button>"; }).join("") + "</div>" : "") +
       '<div class="desc">' + esc(t.desc || "") + "</div>" +
-      '<div class="credits">' + (cast.length ? "<b>Starring</b> " + cast.map(esc).join(", ") + "<br>" : "") + (dirs.length ? "<b>" + (t.type === "SHOW" ? "Created by" : "Director") + "</b> " + dirs.map(esc).join(", ") + "<br>" : "") +
-      ((t.genres || []).length ? "<b>Genres</b> " + t.genres.map(function (g) { return S.GENRES[g] || g; }).join(", ") : "") + "</div>" + actsHTML(t) +
+      '<div class="credits">' + (cast.length ? '<div class="cl">Cast: ' + cast.slice(0, 3).map(esc).join(", ") + (cast.length > 3 ? '<span class="more" data-more> … more</span><span class="rest">, ' + cast.slice(3).map(esc).join(", ") + "</span>" : "") + "</div>" : "") +
+      (dirs.length ? "<div>" + (t.type === "SHOW" ? "Creator: " : "Director: ") + dirs.map(esc).join(", ") + "</div>" : "") + "</div>" + actsHTML(t) +
       '<div class="dtabs">' + (t.type === "SHOW" ? '<button class="on" data-dt="eps">Episodes</button>' : "") + '<button' + (t.type === "SHOW" ? "" : ' class="on"') + ' data-dt="more">More Like This</button></div><div class="dsect"></div></div>';
     d.scrollTop = 0; d.classList.add("on");
     history.pushState({ d: 1 }, "");
     dtab(t.type === "SHOW" ? "eps" : "more");
+    startPreview(t);
   }
   function actsHTML(t) {
-    var inL = S.inList("mylist", t.id), lk = S.inList("likes", t.id), no = S.inList("dislikes", t.id);
-    return '<div class="acts"><button data-list="' + t.id + '"' + (inL ? ' class="on"' : "") + ">" + (inL ? G.check : G.plus) + "My List</button>" +
-      '<button data-like="' + t.id + '"' + (lk ? ' class="on"' : "") + ">" + G.up + (lk ? "Liked" : "Like") + "</button>" +
+    var lk = S.inList("likes", t.id), no = S.inList("dislikes", t.id);
+    return '<div class="acts"><button data-like="' + t.id + '"' + (lk ? ' class="on"' : "") + ">" + (lk ? G.upOn : G.up) + (lk ? "Rated" : "Rate") + "</button>" +
       '<button data-dislike="' + t.id + '"' + (no ? ' class="on no"' : "") + ">" + G.no + "Not for me</button>" +
-      '<button data-share="' + t.id + '">' + G.share + "Share</button></div>";
+      '<button data-trailer="' + t.id + '">' + G.film + "Trailer</button>" +
+      '<button data-share="' + t.id + '">' + G.send + "Share</button></div>";
   }
-  function refreshActs() { var a = $("detail").querySelector(".acts"); if (a && curT) a.outerHTML = actsHTML(curT); }
-  function closeDetail(fromPop) { var d = $("detail"); if (!d.classList.contains("on")) return; d.classList.remove("on"); curT = null; if (!fromPop && history.state && history.state.d) history.back(); }
+  function refreshActs() {
+    var d = $("detail"), a = d.querySelector(".acts"); if (!a || !curT) return; a.outerHTML = actsHTML(curT);
+    var w = d.querySelector(".btn.wide"); if (w) w.innerHTML = S.inList("mylist", curT.id) ? G.check + "In My List" : G.plus + "My List";
+  }
+  function closeDetail(fromPop) { var d = $("detail"); if (!d.classList.contains("on")) return; stopPreview(); d.classList.remove("on"); curT = null; if (!fromPop && history.state && history.state.d) history.back(); }
   function dtab(which) {
     var t = curT, box = $("detail").querySelector(".dsect"); if (!t || !box) return;
     qa(".dtabs button", $("detail")).forEach(function (b) { b.classList.toggle("on", b.dataset.dt === which); });
@@ -410,7 +473,7 @@
         var el = box.querySelector(".eps"); el.textContent = "";
         eps.forEach(function (ep) {
           var e = h("div", "ep"); e._ep = ep;
-          e.innerHTML = '<div class="en">' + ep.n + '</div><div class="et"><b>' + esc(ep.title) + "</b><small>" + (ep.runtime ? ep.runtime + "m" : "") + "</small><p>" + esc(ep.desc) + '</p></div><div class="pl">' + G.play + "</div>";
+          e.innerHTML = '<div class="eh"><div class="eth"><img loading="lazy" src="' + S.bd(t, "s640") + '"><span>' + G.play + '</span></div><div class="et"><b>' + ep.n + ". " + esc(ep.title) + "</b><small>" + (ep.runtime ? ep.runtime + "m" : "") + "</small></div></div><p>" + esc(ep.desc) + "</p>";
           el.appendChild(e);
         });
         if (!eps.length) el.innerHTML = '<div class="note">No episode list for this season yet.</div>';
@@ -430,6 +493,42 @@
     S.playEpisode(t, app, ep);
   }
   function playTitle(id, app) { var t = S.T[id]; if (!t) return; if (!S.play(t, app)) { openDetail(id); return; } toast("Opening " + LABEL[app || S.pickApp(t)] + "…"); }
+
+  // ---------- trailers (YouTube; found daily by tools/trailers.mjs) ----------
+  var TR = {};
+  function trailerOf(t) { return t && TR[t.id] || ""; }
+  function ytSearch(t) { return "https://www.youtube.com/results?search_query=" + encodeURIComponent(t.title + (t.year ? " " + t.year : "") + " official trailer"); }
+  function openTrailer(t) {
+    var id = trailerOf(t); buzz();
+    if (!id) { window.vesperOpen("youtube", ytSearch(t)); return; }
+    stopPreview();
+    var o = h("div", "trl"); o.id = "trl";
+    o.innerHTML = '<div class="tbar"><b>' + esc(t.title) + '</b><button data-tclose>' + G.x + '</button></div><div class="tv"><iframe src="https://www.youtube-nocookie.com/embed/' + id +
+      '?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
+      '<div class="tacts">' + (S.pickApp(t) ? '<button class="btn play" data-play="' + t.id + '">' + G.play + "Play on " + LABEL[S.pickApp(t)] + "</button>" : "") +
+      '<button class="btn wide" data-yt="' + id + '">Open in YouTube</button></div>';
+    document.body.appendChild(o); requestAnimationFrame(function () { o.classList.add("on"); });
+  }
+  function closeTrailer() { var o = $("trl"); if (o) { o.classList.remove("on"); setTimeout(function () { o.remove(); }, 300); } }
+  // details: the trailer starts silently at the top, like Netflix
+  var prevT = null;
+  function startPreview(t) {
+    var id = trailerOf(t), art = $("detail").querySelector(".dart"); if (!id || !art) return;
+    clearTimeout(prevT);
+    prevT = setTimeout(function () { if (curT !== t) return;
+      var f = h("iframe"); f.className = "pv"; f.setAttribute("allow", "autoplay; encrypted-media"); f.setAttribute("playsinline", "");
+      f.src = "https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=" + id + "&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1";
+      f.onload = function () { setTimeout(function () { art.classList.add("playing"); }, 3800); };
+      art.appendChild(f);
+      var m = h("button", "mute", G.muted); m.dataset.mute = "1"; art.appendChild(m);
+    }, 900);
+  }
+  function stopPreview() { clearTimeout(prevT); var d = $("detail"); qa(".dart iframe,.dart .mute", d).forEach(function (x) { x.remove(); }); var a = d.querySelector(".dart"); if (a) a.classList.remove("playing"); }
+  function toggleMute(btn) {
+    var f = $("detail").querySelector(".dart iframe"); if (!f) return; var on = btn.dataset.mute === "1";
+    f.contentWindow.postMessage(JSON.stringify({ event: "command", func: on ? "unMute" : "mute", args: [] }), "*");
+    btn.dataset.mute = on ? "0" : "1"; btn.innerHTML = on ? G.sound : G.muted; buzz();
+  }
 
   // ---------- Who's watching ----------
   function whoIsWatching(done) {
@@ -453,15 +552,23 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-qd],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
     if (D.play) { e.stopPropagation(); if (inSheet) closeSheet(); return playTitle(D.play, D.app); }
+    if (D.trailer) { e.stopPropagation(); if (inSheet) closeSheet(); return openTrailer(S.T[D.trailer]); }
+    if (D.tclose != null) return closeTrailer();
+    if (D.yt) { closeTrailer(); return window.vesperOpen("youtube", "https://www.youtube.com/watch?v=" + D.yt); }
+    if (D.mute) return toggleMute(el);
     if (D.qd) { closeSheet(); return openDetail(D.qd); }
+    if (D.more != null) { el.parentNode.classList.add("open"); return; }
+    if (D.similar) { var sm = S.similar(S.T[D.similar], 12).filter(function (x) { return (x.avail || []).length && !S.hiddenSet()[x.id]; }); if (sm.length) openDetail(sm[Math.floor(Math.random() * Math.min(6, sm.length))].id); return; }
+    if (D.all) { var AL = { recent: "Continue Watching", mylist: "My List", likes: "Liked", dislikes: "Not for Me" }; var items = S.ids(S.list(D.all));
+      return sheet("<h3>" + AL[D.all] + "</h3>", function (card) { card.appendChild(gridOf(items)); }); }
     if (inSheet && (D.list || D.like || D.dislike)) setTimeout(function () { closeSheet(); if (D.dislike && tab !== "search") rerender(); }, 120);
     if (D.list) { var on = S.toggle("mylist", D.list, true); buzz(); toast(on ? "Added to My List" : "Removed from My List");
-      if (el.closest(".hero")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); return; }
+      if (el.closest(".hero,.nhb")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); if (tab === "mylist" && !curT) rerender(); return; }
     if (D.like) { var l = S.like(D.like); buzz(); toast(l ? "Got it — more like this" : "Like removed"); refreshActs(); return; }
     if (D.dislike) { var n = S.dislike(D.dislike); buzz(); toast(n ? "Hidden — we won't show it again" : "It's back"); refreshActs(); return; }
     if (D.share) { var st = S.T[D.share], a = S.pickApp(st); if (navigator.share) navigator.share({ title: st.title, url: a ? S.playUrl(a, st).replace("/watch/", "/title/") : undefined }).catch(function () {}); return; }
@@ -476,6 +583,7 @@
     if (D.sheet === "cats") return catsSheet();
     if (D.sheet === "place") return placeSheet();
     if (D.sheet === "me") return meSheet();
+    if (D.sheet === "people") return peopleSheet();
     if (D.pick != null) { var pk = S.pickForMe(); if (pk) openDetail(pk.id); return; }
     if (D.nh) { arg = D.nh; return rerender(); }
     if (D.wx) { setPref("wx", D.wx); if (D.wx === "live") S.fetchWeather(true).then(rerender); return rerender(); }
@@ -509,6 +617,7 @@
     var t = S.T[id]; if (!t) return; var a = S.pickApp(t), inL = S.inList("mylist", id), lk = S.inList("likes", id), no = S.inList("dislikes", id);
     sheet('<div class="qhead"><img src="' + S.bd(t, "s640") + '"><div><b>' + esc(t.title) + "</b><small>" + metaLine(t).replace(/<i class="dot"><\/i>/g, " · ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ") + "</small></div></div>" +
       (a ? '<button class="opt" data-play="' + id + '">' + G.play + "<span>Play on " + LABEL[a] + "</span></button>" : "") +
+      '<button class="opt" data-trailer="' + id + '">' + G.film + "<span>Watch trailer</span></button>" +
       '<button class="opt" data-qd="' + id + '">' + G.info + "<span>Details & episodes</span></button>" +
       '<button class="opt" data-list="' + id + '">' + (inL ? G.check : G.plus) + "<span>" + (inL ? "Remove from My List" : "Add to My List") + "</span></button>" +
       '<button class="opt" data-like="' + id + '">' + G.up + "<span>" + (lk ? "Remove like" : "Like — show me more like this") + "</span></button>" +
@@ -525,8 +634,9 @@
   // ---------- start ----------
   $("view").addEventListener("scroll", onScroll, { passive: true });
   function fetchCatalog() { return fetch("catalog.json?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
+  function loadTrailers() { return fetch("trailers.json?d=" + new Date().toISOString().slice(0, 10)).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) { TR = j || {}; }).catch(function () {}); }
   function start(cat) {
-    S.load(cat);
+    S.load(cat); loadTrailers();
     var go = function () { show("home", "home"); setTimeout(function () { $("boot").classList.add("out"); }, 60); };
     S.fetchWeather(false).catch(function () {});
     if (S.profiles().length > 1) { $("boot").classList.add("out"); whoIsWatching(go); } else go();

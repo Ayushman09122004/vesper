@@ -15,11 +15,13 @@ jobs:
         with:
           node-version: 20
       - run: node tools/build-catalog.mjs
+      - run: node tools/trailers.mjs 600
+        continue-on-error: true
       - name: Save new catalog
         run: |
           git config user.name "Vesper robot"
           git config user.email "actions@users.noreply.github.com"
-          git add catalog.json
+          git add catalog.json trailers.json
           git diff --cached --quiet && echo "no change" && exit 0
           git commit -m "Daily catalog $(date -u +%F)"
           git push

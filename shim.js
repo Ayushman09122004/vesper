@@ -35,6 +35,7 @@
       return { app: "nflx://", web: web || "https://www.netflix.com/" };
     }
     if (app === "amazon") { var g = gtiOf(web); return g ? { app: "aiv://aiv/detail?gti=" + g + "&action=detail", web: "https://app.primevideo.com/detail?gti=" + g } : { app: "aiv://", web: web || "https://www.primevideo.com/" }; }
+    if (app === "youtube") { var v = web.match(/[?&]v=([\w-]{11})/); return { app: v ? "youtube://www.youtube.com/watch?v=" + v[1] : "youtube://" + web.replace(/^https:\/\//, ""), web: web }; }
     return { app: null, web: web };
   }
   function openUrl(u) { var a = document.createElement("a"); a.href = u; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); }
