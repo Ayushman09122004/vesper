@@ -164,6 +164,8 @@
           (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : sec === "time" ? G.clock : "") + esc(sec === "time" ? tLabel(S.pref("tmax", 60)) : SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.caret) + "</button>" +
           (sec === "shows" ? '<button class="chip" data-go="movies">Films</button>' : sec === "movies" ? '<button class="chip" data-go="shows">Series</button>' : "")
         : '<button class="chip" data-sheet="time">' + G.clock + 'Time</button><button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-go="throwback">Throwback</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
+      if (sec === "throwback") { var ce = S.pref("era", "e10");
+        chips = '<button class="chip x" data-go="home">' + G.x + "</button>" + ERAS.map(function (x) { return '<button class="chip era' + (x.k === ce ? " on" : "") + '" data-era="' + x.k + '">' + x.label + "</button>"; }).join(""); }
       var title = inSec ? esc(SECT_NAMES[sec] || "") : p ? "For " + esc(p.name) : "Home";
       top.innerHTML = '<div class="hrow"><img class="logo" src="icons/icon-180.png" alt=""><h1>' + title + "</h1>" +
         '<button class="hbtn" data-pick title="Pick for me">' + G.dice + '</button><button class="hbtn" data-tab="search">' + G.search + "</button></div><div class=\"chips\">" + chips + "</div>";
@@ -304,7 +306,8 @@
     { k: "e10", label: "2010–14", tag: "Bromances, Instagram filters and New York lofts", a: 2010, b: 2014, seg: "us_e10", tv: "us_se10" },
     { k: "e15", label: "2015–19", tag: "Group chats, road trips and one last summer", a: 2015, b: 2019, seg: "us_e15", tv: "us_se15" }];
   function eraOf(k) { return ERAS.filter(function (e) { return e.k === k; })[0] || ERAS[1]; }
-  function eraPool(e) {
+  function eraPool(e, anyYear) {
+    var yr = anyYear ? 0 : S.pref("eraYear", 0), A0 = e.a, B0 = e.b; if (yr >= e.a && yr <= e.b) e = Object.assign({}, e, { a: yr, b: yr });
     var seen = {}, out = [], A = S._, hid = S.hiddenSet();
     A.seg(e.seg).concat(S.ALL.filter(function (t) { return t.type === "MOVIE" && t.year >= e.a && t.year <= e.b && (t.countries || []).indexOf("US") >= 0; }))
       .forEach(function (t) { if (!seen[t.id] && !hid[t.id] && (t.avail || []).length && t.year >= e.a && t.year <= e.b && t.type === "MOVIE" && everyday(t) && american(t)) { seen[t.id] = 1; out.push(t); } });
@@ -312,6 +315,7 @@
   }
   // the American series that started in that era (live-action, real-world)
   function eraTV(e) {
+    var yr = S.pref("eraYear", 0); if (yr >= e.a && yr <= e.b) e = Object.assign({}, e, { a: yr, b: yr });
     var seen = {}, out = [], hid = S.hiddenSet();
     S._.seg(e.tv).concat(S.ALL.filter(function (t) { return t.type === "SHOW" && t.year >= e.a && t.year <= e.b && (t.countries || []).indexOf("US") >= 0; }))
       .forEach(function (t) { var g = t.genres || []; if (!seen[t.id] && !hid[t.id] && (t.avail || []).length && t.type === "SHOW" && t.year >= e.a && t.year <= e.b &&
@@ -372,8 +376,9 @@
   S.SECTIONS.throwback = function () { return eraRows(eraOf(S.pref("era", "e10"))); };
   function eraBar() {
     var e = eraOf(S.pref("era", "e10")), b = h("div", "erabar");
-    b.innerHTML = '<div class="eras">' + ERAS.map(function (x) { return '<button class="' + (x.k === e.k ? "on" : "") + '" data-era="' + x.k + '">' + x.label + "</button>"; }).join("") +
-      '</div><div class="eratag">' + esc(e.tag) + '</div><button class="roulette" data-roulette="' + e.k + '">' + G.dice + "<span>Throwback Roulette<small>one great " + e.label + " pick, chosen for you</small></span></button>";
+    var yr = S.pref("eraYear", 0), years = []; for (var y = e.a; y <= e.b; y++) years.push(y);
+    b.innerHTML = '<div class="eratag">' + esc(e.tag) + '</div><div class="years"><button class="' + (!yr || yr < e.a || yr > e.b ? "on" : "") + '" data-eyear="0">All ' + e.label + "</button>" +
+      years.map(function (y) { return '<button class="' + (yr === y ? "on" : "") + '" data-eyear="' + y + '">' + y + "</button>"; }).join("") + '</div><button class="roulette" data-roulette="' + e.k + '">' + G.dice + "<span>Throwback Roulette<small>one great " + e.label + " pick, chosen for you</small></span></button>";
     document.documentElement.dataset.era = e.k;
     return b;
   }
@@ -384,7 +389,7 @@
   }
   // one small doorway on Home (a different era each day), so Home never gets crowded
   function throwbackTeaser() {
-    var e = ERAS[new Date().getDate() % 3], P = eraPool(e), hid = S.hiddenSet();
+    var e = ERAS[new Date().getDate() % 3], P = eraPool(e, true), hid = S.hiddenSet();
     var items = famous(P).slice(0, 24).filter(function (t) { return !hid[t.id]; });
     var r = S.R("Throwback · " + e.label, items.sort(function () { return Math.random() - 0.5; }), null, "American films you forgot you loved");
     r.more = e.k; return r;
@@ -1155,7 +1160,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-ci],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -1195,7 +1200,8 @@
       else if (D.ci === "done") { if (!S.inList("watched", ct.id)) S.toggle("watched", ct.id, true); toast("Marked as watched"); }
       else if (D.ci === "next") { setTimeout(function () { openDetail(ct.id); }, 300); }
       return; }
-    if (D.era) { setPref("era", D.era); buzz(); closeSheet(); closeDetail(); return show("home", "throwback"); }
+    if (D.eyear != null && D.eyear !== "") { setPref("eraYear", +D.eyear); buzz(); return show("home", "throwback"); }
+    if (D.era) { setPref("era", D.era); setPref("eraYear", 0); buzz(); closeSheet(); closeDetail(); return show("home", "throwback"); }
     if (D.go) { closeSheet(); closeDetail(); return show("home", D.go); }
     if (D.sheet === "apps") return appsSheet();
     if (D.sheet === "cats") return catsSheet();
@@ -1280,7 +1286,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v20 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v21 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });

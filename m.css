@@ -628,3 +628,14 @@ html[data-era="e15"] .eras button.on{background:#d5f1ef;}
 .cibtns button[data-ci="love"] svg{color:#46d369;}.cibtns button[data-ci="meh"] svg{color:#ff6b6b;}
 #toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;}
 #toast.act button{background:#111;color:#fff;font-size:13px;font-weight:700;padding:7px 12px;border-radius:14px;white-space:nowrap;}
+/* Throwback: era switch in the top bar, year strip below the mood line */
+#top .chip.era{min-width:84px;justify-content:center;}
+html[data-era="e05"] #top .chip.era.on{background:#f1dfc2;}
+html[data-era="e10"] #top .chip.era.on{background:#f7d9e6;}
+html[data-era="e15"] #top .chip.era.on{background:#d5f1ef;}
+.erabar{padding:8px 16px 18px;}
+.eratag{margin-top:0;}
+.years{display:flex;gap:6px;overflow-x:auto;margin:12px -16px 0;padding:0 16px;scrollbar-width:none;}
+.years::-webkit-scrollbar{display:none;}
+.years button{flex:none;height:30px;padding:0 12px;border-radius:15px;font-size:13px;font-weight:700;color:#bbb;background:rgba(255,255,255,.07);}
+.years button.on{background:rgba(243,164,107,.25);color:#fff;box-shadow:inset 0 0 0 1px rgba(243,164,107,.6);}
