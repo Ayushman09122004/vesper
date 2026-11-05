@@ -36,7 +36,10 @@
   var tab = "home", sec = "home", arg = null, noted = false, POS = {};
   function setPref(k, v) { var p = Object.assign({}, S.state.prefs || {}); p[k] = v; S.setRaw("prefs", p); }
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("on"); }, 1800); }
-  function buzz() { if (navigator.vibrate) navigator.vibrate(8); }
+  // iPhone haptics: Safari gives a light tap when a switch control is toggled, so we keep a hidden one to "press"
+  var hapEl = (function () { var w = h("div"); w.style.cssText = "position:fixed;left:-99px;top:0;width:1px;height:1px;overflow:hidden;opacity:0";
+    w.innerHTML = '<input type="checkbox" switch id="hap"><label for="hap" id="hapl"></label>'; document.body.appendChild(w); return w.querySelector("label"); })();
+  function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); else hapEl.click(); } catch (e) {} }
 
   var SECT_NAMES = { home: "Home", shows: "Series", movies: "Films", collections: "Collections", anime: "Anime", korean: "Korean", english: "Hollywood", uk: "British",
     indian: "Indian", world: "World Cinema", weather: "Weather", "new": "New & Hot", mylist: "My List" };
@@ -450,10 +453,13 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-qd],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero");
     if (!el) return;
     var D = el.dataset;
-    if (D.play) { e.stopPropagation(); return playTitle(D.play, D.app); }
+    var inSheet = !!el.closest("#sheet");
+    if (D.play) { e.stopPropagation(); if (inSheet) closeSheet(); return playTitle(D.play, D.app); }
+    if (D.qd) { closeSheet(); return openDetail(D.qd); }
+    if (inSheet && (D.list || D.like || D.dislike)) setTimeout(function () { closeSheet(); if (D.dislike && tab !== "search") rerender(); }, 120);
     if (D.list) { var on = S.toggle("mylist", D.list, true); buzz(); toast(on ? "Added to My List" : "Removed from My List");
       if (el.closest(".hero")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); return; }
     if (D.like) { var l = S.like(D.like); buzz(); toast(l ? "Got it — more like this" : "Like removed"); refreshActs(); return; }
@@ -486,6 +492,29 @@
   });
   window.addEventListener("popstate", function () { closeDetail(true); });
 
+  // press and hold any poster: quick actions, like iOS
+  (function () {
+    var timer = null, x0 = 0, y0 = 0, held = false;
+    document.addEventListener("touchstart", function (e) {
+      var c = e.target.closest(".pc,.wide,.nh,.li"); held = false; if (!c || !c.dataset.id) return;
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+      timer = setTimeout(function () { timer = null; buzz(); held = true; quick(c.dataset.id); }, 480);
+    }, { passive: true });
+    document.addEventListener("touchmove", function (e) { if (timer && (Math.abs(e.touches[0].clientX - x0) > 8 || Math.abs(e.touches[0].clientY - y0) > 8)) { clearTimeout(timer); timer = null; } }, { passive: true });
+    document.addEventListener("touchend", function () { if (timer) { clearTimeout(timer); timer = null; } }, { passive: true });
+    document.addEventListener("click", function (e) { if (e.target.closest("#hap,#hapl")) return; if (held) { held = false; if (!e.target.closest("#sheet")) { e.stopPropagation(); e.preventDefault(); } } }, true);
+    document.addEventListener("contextmenu", function (e) { if (e.target.closest(".pc,.wide,.nh,.li")) e.preventDefault(); });
+  })();
+  function quick(id) {
+    var t = S.T[id]; if (!t) return; var a = S.pickApp(t), inL = S.inList("mylist", id), lk = S.inList("likes", id), no = S.inList("dislikes", id);
+    sheet('<div class="qhead"><img src="' + S.bd(t, "s640") + '"><div><b>' + esc(t.title) + "</b><small>" + metaLine(t).replace(/<i class="dot"><\/i>/g, " · ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ") + "</small></div></div>" +
+      (a ? '<button class="opt" data-play="' + id + '">' + G.play + "<span>Play on " + LABEL[a] + "</span></button>" : "") +
+      '<button class="opt" data-qd="' + id + '">' + G.info + "<span>Details & episodes</span></button>" +
+      '<button class="opt" data-list="' + id + '">' + (inL ? G.check : G.plus) + "<span>" + (inL ? "Remove from My List" : "Add to My List") + "</span></button>" +
+      '<button class="opt" data-like="' + id + '">' + G.up + "<span>" + (lk ? "Remove like" : "Like — show me more like this") + "</span></button>" +
+      '<button class="opt" data-dislike="' + id + '">' + G.no + "<span>" + (no ? "Show it again" : "Not for me") + "</span></button>");
+  }
+
   // details: swipe down from the top to close
   (function () { var d = $("detail"), y0 = null;
     d.addEventListener("touchstart", function (e) { y0 = d.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
@@ -502,6 +531,12 @@
     S.fetchWeather(false).catch(function () {});
     if (S.profiles().length > 1) { $("boot").classList.add("out"); whoIsWatching(go); } else go();
   }
+  // opened in Safari instead of from the Home Screen: show how to install
+  var standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) setTimeout(function () {
+    var c = h("div", "coach", '<img src="icons/icon-180.png"><div><b>Put Vesper on your Home Screen</b>Tap <span class="sh">' + G.share + '</span> below, then <b>Add to Home Screen</b>.</div><button>' + G.x + "</button>");
+    document.body.appendChild(c); c.querySelector("button").onclick = function () { c.remove(); };
+  }, 1500);
   fetchCatalog().then(start).catch(function () {
     $("boot").innerHTML = '<div class="empty"><b>Can\'t reach Vesper</b>Check your connection and open it again.</div>';
   });

@@ -259,3 +259,20 @@ img{-webkit-user-drag:none;}
   background:rgba(240,240,245,.95);color:#111;font-size:14px;font-weight:600;padding:10px 18px;border-radius:20px;transition:all .3s var(--e);white-space:nowrap;}
 #toast.on{opacity:1;transform:translate(-50%,0);}
 input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none;display:none;}
+
+/* quick actions (press and hold) */
+.qhead{display:flex;gap:12px;align-items:center;padding:2px 20px 12px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+.qhead img{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;}
+.qhead b{display:block;font-size:16px;line-height:1.2;}
+.qhead small{display:block;font-size:12px;color:var(--dim);margin-top:4px;}
+.opt svg{width:24px;height:24px;flex:none;color:#ddd;}
+/* install coach */
+.coach{position:fixed;left:12px;right:12px;bottom:calc(var(--sb) + 84px);z-index:80;display:flex;gap:12px;align-items:center;padding:12px 12px 12px 14px;border-radius:16px;
+  background:rgba(32,30,48,.92);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:13px;color:#ddd;line-height:1.4;animation:pageIn .4s var(--e);}
+.coach img{width:44px;height:44px;border-radius:10px;flex:none;}
+.coach b{color:#fff;}
+.coach > div > b:first-child{display:block;font-size:14.5px;margin-bottom:2px;}
+.coach .sh svg{display:inline;width:16px;height:16px;vertical-align:-3px;color:#5aa9ff;}
+.coach button{flex:none;width:30px;height:30px;}
+.coach button svg{width:16px;height:16px;margin:auto;color:#999;}
+.pc,.wide,.nh,.li{-webkit-touch-callout:none;}
