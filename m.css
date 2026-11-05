@@ -456,3 +456,6 @@ html.fit #tabs{top:calc(var(--H) - var(--sb) * .5 - 4px - 64px);bottom:auto;}
 html.fit #toast{top:calc(var(--H) - var(--sb) - 92px - 40px);bottom:auto;}
 html.fit .coach{display:none;}
 html.fit .tacts{top:calc(var(--H) - var(--sb) - 20px - 110px);bottom:auto;}
+/* belt and braces: on iOS home-screen apps 100vh is the true screen height even when % heights come up short */
+html,body{min-height:100vh;}
+html:not(.fit) #view{bottom:auto;height:max(100%,100vh);}
