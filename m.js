@@ -37,6 +37,8 @@
     clock: I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
     heart: I('<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>'),
     people: I('<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c.7-3.2 3-4.8 6-4.8s5.3 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.8c2.4.2 4 1.6 4.5 4.2"/>'),
+    cloud: I('<path d="M7.5 18.5a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5 3.75 3.75 0 0 1 0 7.5z"/><path d="M9.5 13.5l2 2 3.5-3.5"/>'),
+    google: '<svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.5-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>',
     menu: I('<path d="M4 7h16M4 12h16M4 17h16"/>', 2),
     person: I('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.9-3.6 3.6-5.4 7-5.4s6.1 1.8 7 5.4"/>'),
     send: I('<path d="M21 3.5L10.5 13.5M21 3.5l-6.5 17-4-7-7-4z"/>'),
@@ -891,6 +893,7 @@
     opts.innerHTML = '<button class="mrow" data-sheet="place"><i style="--c:#3b82f6">' + G.weather + "</i><span>Weather mood<small>" + (L ? esc(S.wxWords(L.code)) + " · " + Math.round(L.temp) + "° in " : "From ") + esc(S.place().name) + "</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-sheet="me"><i style="--c:#e50914">' + G.play + "</i><span>Play on first<small>" + (fav === "auto" ? "Best available app" : LABEL[fav]) + "</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-sheet="people"><i style="--c:#8f7cff">' + G.person + "</i><span>Profiles<small>" + (many ? S.profiles().length + " people" : "Add family members") + "</small></span>" + G.r + "</button>" +
+      syncRow() +
       '<button class="mrow" data-qr><i style="--c:#f3a46b">' + G.heart + "</i><span>Quick Rate<small>Swipe 20 posters, sharpen your picks</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-together><i style="--c:#22a06b">' + G.people + "</i><span>Watch together<small>What you'll both enjoy</small></span>" + G.r + "</button>";
     page.appendChild(opts);
@@ -955,6 +958,32 @@
       '<h4>Weather</h4><button class="opt" data-sheet="place">' + G.pin + "<span>" + esc(S.place().name) + "</span><small>Change</small></button>" +
       '<h4>History</h4><button class="opt red" data-clear><span>Forget what I opened and liked</span></button>' +
       '<div class="foot">Show list updated ' + (gen ? gen.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : "—") + " · " + S.ALL.length + " titles across Netflix, Prime Video, JioHotstar, Apple TV+ and Crunchyroll.<br>Your lists stay on this iPhone.<br><span style=\"opacity:.6\">" + displayInfo() + "</span></div>");
+  }
+  // ---------- sync (Google account) ----------
+  function syncRow() {
+    var Y = window.VesperSync || { status: "off" }, on = Y.status === "synced" || Y.status === "syncing";
+    var sub = Y.status === "synced" ? "Synced" + (Y.email ? " · " + Y.email : Y.linked ? " · linked device" : "") : Y.status === "syncing" ? "Syncing…" : Y.status === "error" ? "Couldn't sync — tap to retry" : "Sign in with Google to keep your list and taste everywhere";
+    return '<button class="mrow" data-sheet="sync"><i style="--c:' + (on ? "#22a06b" : "#4285f4") + '">' + G.cloud + "</i><span>" + (on ? "Your Vesper account" : "Save to your Google account") + "<small>" + esc(sub) + "</small></span>" + G.r + "</button>";
+  }
+  function syncSheet() {
+    var Y = window.VesperSync; if (!Y) return;
+    var on = Y.status === "synced" || Y.status === "syncing";
+    if (!on) {
+      sheet('<h3>Keep Vesper everywhere</h3><div class="sub-h" style="padding:0 20px 14px">Your My List, likes, profiles and taste are saved to your Google account — never lost, and the same on your Mac and TV.</div>' +
+        '<div class="sheet-in"><button class="btn gbtn" data-sync="google">' + G.google + "Sign in with Google</button></div>" +
+        '<div class="sheet-in"><button class="btn wide" data-sync="code">Use a link code instead</button></div>' +
+        '<div class="foot">Free — your data lives in your own Google account. Vesper never sees your password.</div>');
+      return;
+    }
+    sheet("<h3>Your Vesper account</h3>" + '<div class="sub-h" style="padding:0 20px 10px">' + (Y.email ? "Signed in as <b>" + esc(Y.email) + "</b>" : "This device is linked to your account") + " · " + (Y.status === "synced" ? "everything is saved" : "saving…") + "</div>" +
+      (Y.email ? '<h4>Link your TV or another device</h4><div class="sub-h" style="padding:0 20px 8px">Open Vesper there, choose “Link with a code”, and type the 6 letters it shows:</div>' +
+        '<div class="sheet-in codein"><input maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off"><button class="btn play" data-sync="approve">Link</button></div><div class="sub-h linkmsg" style="padding:0 20px"></div>' : "") +
+      '<button class="opt red" data-sync="out"><span>Sign out on this device</span></button>');
+  }
+  function linkCodeSheet() {
+    sheet('<h3>Link with a code</h3><div class="sub-h" style="padding:0 20px 14px">On a device that\'s already signed in (your Mac or another phone), open My Vesper → Your Vesper account, and type this code:</div><div class="bigcode"><div class="spin"></div></div>');
+    window.VesperSync.requestLink(function (c) { var b = document.querySelector(".bigcode"); if (b) b.textContent = c.slice(0, 3) + " " + c.slice(3); },
+      function () { closeSheet(); toast("Linked — your Vesper is here"); rerender(); }).catch(function () { var b = document.querySelector(".bigcode"); if (b) b.textContent = "Offline — try again"; });
   }
   function peopleSheet() {
     var ps = S.profiles(), cur = S.state.profile;
@@ -1160,7 +1189,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-sync],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -1194,6 +1223,13 @@
     if (el.classList.contains("ep") && curT) { var b2 = el.closest(".dsect"); playEp(curT, el._ep); setTimeout(function () { if (curT && b2) loadEpisodes(curT, b2, el._ep.s); }, 800); return; }
     if (D.tab) { closeSheet(); closeDetail(); if (D.tab === tab && tab === "home" && sec !== "home") return show("home", "home"); if (D.tab === tab) { $("view").scrollTo({ top: 0, behavior: "smooth" }); return; } return show(D.tab, null, null, true); }
     if (D.roulette) return roulette(D.roulette);
+    if (D.sync) { var Y = window.VesperSync;
+      if (D.sync === "google") { Y.signIn().then(function () { closeSheet(); toast("Signed in — saving your Vesper"); }).catch(function (er) { toast(er && er.code === "auth/popup-closed-by-user" ? "Sign-in cancelled" : "Couldn't sign in — try a link code"); }); return; }
+      if (D.sync === "code") return linkCodeSheet();
+      if (D.sync === "out") { Y.signOut(); closeSheet(); toast("Signed out — your lists stay on this phone"); return rerender(); }
+      if (D.sync === "approve") { var inp = document.querySelector(".codein input"), msg = document.querySelector(".linkmsg");
+        Y.approveLink(inp.value).then(function (n) { buzz(); msg.textContent = "Linked " + n + " ✓"; inp.value = ""; }).catch(function (er) { msg.textContent = er.message; }); return; }
+      return; }
     if (D.ci) { var ct = S.T[D.cid]; closeSheet(); buzz(); if (!ct) return;
       if (D.ci === "love") { if (!S.inList("likes", ct.id)) S.like(ct.id); toast("Noted — more like " + ct.title); }
       else if (D.ci === "meh") { if (!S.inList("dislikes", ct.id)) S.dislike(ct.id); toast("Got it — fewer like this"); }
@@ -1207,6 +1243,7 @@
     if (D.sheet === "cats") return catsSheet();
     if (D.sheet === "place") return placeSheet();
     if (D.sheet === "me") return meSheet();
+    if (D.sheet === "sync") return syncSheet();
     if (D.sheet === "time") return timeSheet();
     if (D.sheet === "people") return peopleSheet();
     if (D.pick != null) { var pk = S.pickForMe(); if (pk) openDetail(pk.id); return; }
@@ -1286,7 +1323,7 @@
   function displayInfo() {
     var p = document.createElement("div"); p.style.cssText = "position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
     document.body.appendChild(p); var cs = getComputedStyle(p), st = cs.paddingTop, sb = cs.paddingBottom; p.remove();
-    return "Vesper v21 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
+    return "Vesper v22 · Display: screen " + screen.width + "×" + screen.height + " · window " + innerWidth + "×" + innerHeight + " · edges " + parseInt(st) + "/" + parseInt(sb) +
       " · " + (navigator.standalone ? "home-screen" : "browser") + (document.documentElement.classList.contains("fit") ? " · fit" : "");
   }
   fitScreen(); addEventListener("resize", fitScreen); addEventListener("orientationchange", function () { setTimeout(fitScreen, 300); });
@@ -1295,7 +1332,10 @@
   $("view").addEventListener("scroll", onScroll, { passive: true });
   function fetchCatalog() { return fetch("catalog.json?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
   function loadTrailers() { return fetch("trailers.json?d=" + new Date().toISOString().slice(0, 10)).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) { TR = j || {}; }).catch(function () {}); }
+  window.vesperRefresh = function () { S.state = window.vesperState; if (!$("detail").classList.contains("on") && !$("sheet").classList.contains("on")) rerender(); };
+  if (window.VesperSync) window.VesperSync.onChange(function () { if (tab === "mylist" && !$("sheet").classList.contains("on")) rerender(); });
   function start(cat) {
+    if (window.VesperSync) setTimeout(function () { window.VesperSync.start(); }, 600);
     S.load(cat); loadTrailers();
     var go = function () { show("home", "home"); setTimeout(function () { $("boot").classList.add("out"); }, 60); };
     S.fetchWeather(false).catch(function () {});
