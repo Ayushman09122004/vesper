@@ -647,3 +647,11 @@ html[data-era="e15"] #top .chip.era.on{background:#d5f1ef;}
 .codein .btn{flex:none;width:90px;}
 .bigcode{margin:6px 20px 24px;padding:22px 0;border-radius:14px;background:#22222c;text-align:center;font-size:38px;font-weight:900;letter-spacing:8px;}
 .bigcode .spin{margin:0 auto;}
+/* ShowBox (v23) */
+.pc .sbl{position:absolute;left:6px;bottom:6px;font-size:8.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#1a0d05;background:#f3a46b;padding:2px 5px;border-radius:4px;z-index:2;}
+.sbtog{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 14px;margin:0 0 12px;border-radius:16px;border:0;background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);font:600 13px/1 inherit;}
+.sbtog i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3);}
+.sbtog.on{color:#f6d3b6;background:rgba(243,164,107,.16);}.sbtog.on i{background:#f3a46b;box-shadow:0 0 8px rgba(243,164,107,.8);}
+.sbres .sbph{height:calc(var(--pw,112px) * 1.5);margin:0 16px 18px;border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.08),rgba(255,255,255,.04));}
+.btn.feb{background:linear-gradient(90deg,#e0884a,#f3a46b);color:#1a0d05;}
+.btn.wide.feb{margin-top:8px;}

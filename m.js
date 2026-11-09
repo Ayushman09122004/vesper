@@ -49,8 +49,8 @@
   // ---------- state ----------
   S.state = window.vesperState;
   var _po = S.po, _bd = S.bd, webp = function (u) { return u ? u.replace(/\.jpg$/, ".webp") : u; };
-  S.po = function (t, size) { return webp(_po(t, size)); };
-  S.bd = function (t, size) { return webp(_bd(t, size)); };
+  S.po = function (t, size) { return t && /^https?:/.test(t.poster || "") ? t.poster : webp(_po(t, size)); };
+  S.bd = function (t, size) { return t && /^https?:/.test(t.backdrop || "") ? t.backdrop : webp(_bd(t, size)); };
   // an image that fails as WebP quietly retries as JPEG, then a smaller size
   window.vImgErr = function (im) {
     var u = im.src; if (/\.webp$/.test(u)) { im.src = u.replace(/\.webp$/, ".jpg"); return; }
@@ -91,7 +91,7 @@
     var c = h("div", "pc"); c.dataset.id = t.id;
     var src = S.po(t, "s592"), lg = t.orig ? '<img class="lg" src="' + LOGO[t.orig] + '">' : "";
     c.innerHTML = (src ? '<img class="p"' + (i != null && i < 6 ? "" : ' loading="lazy"') + ' decoding="async" src="' + src + '" onload="this.classList.add(\'ok\')" onerror="vImgErr(this)">' : "") +
-      '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t);
+      '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t) + (window.VSB ? VSB.label(t) : "");
     if (src) { var im = c.querySelector("img.p"); im.addEventListener("error", function () { if (im.dataset.f === "1" && !im.isConnected) c.querySelector(".nt").style.opacity = 1; setTimeout(function () { if (!im.isConnected) c.querySelector(".nt").style.opacity = 1; }, 50); }); }
     return c;
   }
@@ -564,6 +564,7 @@
     var box = h("div", "sbox", G.search + '<input type="search" placeholder="Shows, films, actors, genres" enterkeyhint="search" autocomplete="off" autocorrect="off"><button class="clr">' + G.xc + "</button>");
     page.appendChild(box);
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
+    if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); page.appendChild(sbt); }
     chips.style.margin = "0 0 14px"; page.appendChild(chips); page.appendChild(body);
     inp.value = arg || "";
     var t = null, rawOnly = false;
@@ -588,6 +589,7 @@
       var fixedQ = autocorrect(q);
       if (!rawOnly && fixedQ !== q && S.norm(fixedQ) !== S.norm(q)) body.appendChild(h("div", "fixq", "Showing results for <b>" + esc(fixedQ) + '</b><button data-raw="' + esc(q) + '">Search “' + esc(q) + "” instead</button>"));
       var R = smartSearch(rawOnly ? q : fixedQ); rawOnly = false;
+      if (window.VSB && VSB.on()) VSB.searchInto(body, rawOnly ? q : fixedQ, R, rowEl);
       if (R.sections) {
         chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
         if (!R.sections.length) { body.appendChild(h("div", "empty", "<b>Nothing like that on your apps</b>Try a nearby year, or drop a word.")); return; }
@@ -1014,7 +1016,7 @@
     d.innerHTML = '<div class="dtop"></div><div class="dbar"><span>' + esc(t.title) + '</span></div><button class="dclose" data-close>' + G.x + '</button><div class="dart"><img decoding="async" fetchpriority="high" src="' + S.bd(t, "s1440") + '" onerror="vImgErr(this)"><div class="g"></div></div><div class="dbody">' +
       tagLine(t) + "<h2>" + esc(t.title) + '</h2><div class="dmeta">' + meta + "</div>" +
       (rank ? '<div class="drank"><span class="t10">TOP<br>10</span>' + esc(rank) + "</div>" : arr ? '<div class="drank new">' + (arr.season > 1 ? "New season just added" : "Just added") + "</div>" : "") +
-      plays + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
+      (t.site && !best ? '<button class="btn play big feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : plays) + (t.site && best ? '<button class="btn wide feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : "") + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
       (others.length ? '<div class="also"><small>Also on</small>' + others.map(function (a) { return '<button data-play="' + t.id + '" data-app="' + a + '"><img src="' + LOGO[a] + '">' + LABEL[a] + "</button>"; }).join("") + "</div>" : "") +
       '<div class="desc">' + esc(t.desc || "") + "</div>" +
       '<div class="credits">' + (cast.length ? '<div class="cl">Cast: ' + cast.slice(0, 3).map(esc).join(", ") + (cast.length > 3 ? '<span class="more" data-more> … more</span><span class="rest">, ' + cast.slice(3).map(esc).join(", ") + "</span>" : "") + "</div>" : "") +
@@ -1027,6 +1029,7 @@
     history.pushState({ d: 1 }, "");
     dtab(t.type === "SHOW" ? "eps" : "more");
     startPreview(t);
+    if (window.VSB && t.site) VSB.prep(t, d.querySelector(".desc"));
   }
   function actsHTML(t) {
     var lk = S.inList("likes", t.id), no = S.inList("dislikes", t.id);
@@ -1189,6 +1192,7 @@
 
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
+    var fb = e.target.closest("[data-feb]"); if (fb && window.VSB) { e.stopPropagation(); return VSB.play(S.T[fb.dataset.feb], toast); }
     var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-sync],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
