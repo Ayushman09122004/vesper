@@ -655,3 +655,32 @@ html[data-era="e15"] #top .chip.era.on{background:#d5f1ef;}
 .sbres .sbph{height:calc(var(--pw,112px) * 1.5);margin:0 16px 18px;border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.08),rgba(255,255,255,.04));}
 .btn.feb{background:linear-gradient(90deg,#e0884a,#f3a46b);color:#1a0d05;}
 .btn.wide.feb{margin-top:8px;}
+
+/* ---------- wide screens (laptop / desktop browsers, iPad landscape): same app, sized for a big window ---------- */
+@media (min-width: 960px) {
+  :root{--pw:clamp(130px,calc((100vw - 64px) / 7.3),200px);}
+  .row-h{padding:0 32px 10px;font-size:20px;}
+  .rail{gap:10px;padding:0 32px;scroll-padding:0 32px;}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:0 32px 24px;}
+  .wide{width:min(78vw,440px);}
+  #top{padding-left:32px;padding-right:32px;}
+  /* billboard: big posters side by side instead of one screen-filling poster */
+  .heros{margin:10px 0 34px;}
+  .htrack{padding:0 32px;scroll-padding:0 32px;gap:16px;}
+  .htrack .hero{width:clamp(260px,24vw,340px);scroll-snap-align:start;}
+  .hero{margin:6px 32px 30px;max-width:340px;}
+  .hero .nm{font-size:28px;}
+  .toprez{margin:0 32px 24px;max-width:760px;}
+  .toprez .art{width:280px;}
+  .sbtog,.sbox{margin-left:32px;margin-right:32px;}
+  .page>.chips,.page>.quick,.page>.sec-h,.page .sec-h{padding-left:32px;padding-right:32px;}
+  /* title page: a centred column */
+  #detail{padding:0 max(0px,calc((100vw - 960px) / 2));}
+  .dart{border-radius:0 0 14px 14px;overflow:hidden;}
+  /* sheets and the tab bar: centred, not edge to edge */
+  #sheet .card{left:calc(50% - 280px);right:calc(50% - 280px);border-radius:16px 16px 0 0;}
+  #tabs{left:calc(50% - 260px);right:calc(50% - 260px);}
+  /* pointer: a little lift on hover */
+  .pc{transition:transform .25s var(--e),box-shadow .25s;}
+  .pc:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(0,0,0,.45);}
+}
