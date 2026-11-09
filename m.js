@@ -240,7 +240,9 @@
     var arr = S.arrivalOf(t), kicker = s === "home" && wn && S.wxRow(wn.k, 30).indexOf(t) >= 0 ? wn.hero : arr ? (arr.season > 1 ? "New Season" : "Just Added") : rankOf(t);
     var el = h("section", "hero"); el.dataset.id = t.id;
     var inL = S.inList("mylist", t.id), a = t.orig || S.pickApp(t);
-    el.innerHTML = '<img class="p" decoding="async"' + (first ? ' fetchpriority="high"' : ' loading="lazy"') + ' src="' + S.po(t, "s718") + '" onload="this.classList.add(\'ok\')" onerror="vImgErr(this)"><div class="sh"></div>' +
+    // laptop browsers (big window + mouse/trackpad): a wide billboard picture; phones keep the poster
+    var wide = window.VDESK && t.backdrop; if (wide) el.classList.add("wideh");
+    el.innerHTML = '<img class="p" decoding="async"' + (first ? ' fetchpriority="high"' : ' loading="lazy"') + ' src="' + (wide ? S.bd(t, "s1440") : S.po(t, "s718")) + '" onload="this.classList.add(\'ok\')" onerror="vImgErr(this)"><div class="sh"></div>' +
       (a ? '<img class="svc" src="' + LOGO[a] + '">' : "") + '<div class="inf">' +
       (kicker ? '<div class="kick">' + esc(kicker) + "</div>" : "") + '<div class="nm">' + esc(t.title) + '</div><div class="line">' +
       genreWords(t).map(esc).join('<i class="dot"></i>') + "</div>" +
