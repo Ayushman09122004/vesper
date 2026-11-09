@@ -83,23 +83,54 @@
     if (h) { if (!t.site) t.site = { url: h }; return cb(true); } if (h === 0) return cb(false);
     SR.search(SITE, t.title, function (err, list) { var hit = (list || []).filter(function (c) { var y = yearOf(c); return norm(c.title) === norm(t.title) && (!t.year || !y || Math.abs(y - t.year) <= 1); })[0];
       HAS[k] = hit ? hit.url : 0; if (hit && !t.site) { t.site = { url: hit.url }; S.T["st:" + hit.url] = t; } saveLater(); cb(!!hit); }); }
+  // ShowBox's own results show as soon as its search answers; Vesper's matches it already lists need no extra lookup;
+  // only the top few others are checked (all at once), and labels/rows grow as answers arrive. Results are remembered.
+  var SQC = ld("sq", {});
+  // typos: "butterfly effet" still finds "The Butterfly Effect" (each word you typed ≈ a word of the title)
+  function lev(a, b) { if (Math.abs(a.length - b.length) > 2) return 9; var d = [], i, j; for (i = 0; i <= a.length; i++) { d[i] = [i]; }
+    for (j = 1; j <= b.length; j++) d[0][j] = j; for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length]; }
+  var STOPW = { the: 1, a: 1, an: 1, of: 1, and: 1 };
+  function close(title, qn) { var tw = norm(title).split(" "), qw = qn.split(" ").filter(function (w) { return w && !STOPW[w]; }); if (!qw.length) return 0; var hit = 0;
+    qw.forEach(function (w) { if (tw.some(function (x) { return x === w || (w.length >= 3 && x.indexOf(w) === 0) || (w.length >= 4 && lev(x, w) <= (w.length >= 7 ? 2 : 1)); })) hit++; });
+    return hit === qw.length ? 2 + (tw.filter(function (x) { return !STOPW[x]; }).length === qw.length ? 1 : 0) : 0; }
+  // ShowBox's search doesn't forgive typos: when it finds little, also search its most distinctive word and keep the close titles
+  function sbSearch(q, qn, cb) { SR.search(SITE, q, function (err, list) { list = list || [];
+      if (list.some(function (c) { return close(c.title, qn) >= 3; }) || !/\s/.test(qn) && list.length) return cb(list);
+      var key = qn.split(" ").filter(function (w) { return !STOPW[w]; }).sort(function (a, b) { return b.length - a.length; })[0];
+      if (!key || key === qn) return cb(list);
+      SR.search(SITE, key, function (e2, l2) { var seen = {}, out = [];
+        list.concat((l2 || []).filter(function (c) { return close(c.title, qn); }).sort(function (a, b) { return close(b.title, qn) - close(a.title, qn); }))
+          .forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); cb(out); }); }); }
   function searchInto(body, q, R, rowEl) {
     if (!ON || !q) return; var my = ++tok, qn = norm(q);
     var box = document.createElement("div"); box.className = "sbres"; box.innerHTML = '<div class="row-h">On ShowBox<small>looking…</small></div><div class="sbph"></div>';
     body.insertBefore(box, body.firstChild);
     var mine = [];   // Vesper's own matches, best first
-    if (R.top) mine.push(R.top); (R.titles || []).forEach(function (t) { mine.push(t); }); (R.sections || []).forEach(function (s) { (s.items || []).forEach(function (t) { mine.push(t); }); }); (R.vibe || []).forEach(function (t) { mine.push(t); });
+    // Vesper's title matches; only when there are none (an actor, a topic) its wider picks
+    if (R.top) mine.push(R.top); (R.titles || []).forEach(function (t) { mine.push(t); });
+    var loose = !mine.length;
+    if (loose) { (R.sections || []).forEach(function (s) { (s.items || []).forEach(function (t) { mine.push(t); }); }); (R.vibe || []).forEach(function (t) { mine.push(t); }); }
     mine = mine.filter(function (t, i) { return t && mine.indexOf(t) === i; }).slice(0, 12);
-    setTimeout(function () { if (my !== tok) return;   // wait until you stop typing
-      var left = mine.length + 1, ok = [];
-      function done() { if (--left > 0 || my !== tok) return;
-        var own = (SSR[qn] || []).map(T), exact = own.filter(function (t) { return norm(t.title) === qn; }), seen = {}, items = [];
-        exact.concat(mine.filter(function (t) { return ok.indexOf(t) >= 0; })).concat(own).forEach(function (t) { if (t && !seen[t.id]) { seen[t.id] = 1; items.push(t); } });
-        if (!items.length) { box.querySelector("small").textContent = "nothing for “" + q + "”"; box.querySelector(".sbph").remove(); return; }
-        var row = rowEl(S.R("On ShowBox", items.slice(0, 30), null, items.length + " · tap Play with FebBox", 1, true)); box.replaceWith(row); row._fill(); }
-      if (SSR[qn]) done(); else SR.search(SITE, q, function (err, list) { SSR[qn] = (list || []).map(slim); done(); });
-      mine.forEach(function (t) { check(t, function (yes) { if (yes) ok.push(t); done(); }); });
-    }, 450);
+    var cur = box, ok = [];
+    function paint() { if (my !== tok) return;
+      var own = (SSR[qn] || []).map(T), byName = {}; own.forEach(function (t) { byName[norm(t.title)] = 1; });
+      mine.forEach(function (t) { if (ok.indexOf(t) < 0 && (t.site || byName[norm(t.title)])) ok.push(t); });
+      var exact = own.filter(function (t) { return norm(t.title) === qn || close(t.title, qn) >= 3; }), seen = {}, items = [];
+      exact.concat(loose && exact.length ? [] : mine.filter(function (t) { return ok.indexOf(t) >= 0; })).concat(loose && exact.length ? own.filter(function (t) { return close(t.title, qn); }) : own).forEach(function (t) { if (t && !seen[t.id]) { seen[t.id] = 1; items.push(t); } });
+      if (!items.length) { if (SSR[qn]) { var sm = cur.querySelector && cur.querySelector("small"); if (sm) sm.textContent = "nothing for “" + q + "”"; var ph = cur.querySelector && cur.querySelector(".sbph"); if (ph) ph.remove(); } return; }
+      var row = rowEl(S.R("On ShowBox", items.slice(0, 30), null, items.length + " · tap Play with FebBox", 1, true)), keep = cur.querySelector && cur.querySelector(".rail"), x = keep ? keep.scrollLeft : 0;
+      cur.replaceWith(row); row._fill(); var nr = row.querySelector(".rail"); if (nr && x) nr.scrollLeft = x; cur = row; }
+    if (SQC[qn]) SSR[qn] = SQC[qn];
+    if (SSR[qn]) paint();   // seen this search before: instant
+    setTimeout(function () { if (my !== tok) return;   // a short pause after typing
+      if (!SSR[qn]) sbSearch(q, qn, function (list) { SSR[qn] = (list || []).map(slim); SQC[qn] = SSR[qn]; var ks = Object.keys(SQC); if (ks.length > 120) delete SQC[ks[0]]; sv("sq", SQC); paint(); next(); });
+      else next();
+      function next() {   // the top few Vesper matches ShowBox's own list didn't include: check them all at once
+        var own = {}; (SSR[qn] || []).forEach(function (c) { own[norm(c.title)] = 1; });
+        mine.filter(function (t) { return !t.site && !own[norm(t.title)]; }).slice(0, 6).forEach(function (t) { check(t, function (yes) { if (yes && ok.indexOf(t) < 0) { ok.push(t); paint(); } }); });
+      }
+    }, 250);
   }
   function toggle(onChange) { var b = document.createElement("button"); b.className = "sbtog" + (ON ? " on" : ""); b.innerHTML = "<i></i>ShowBox " + (ON ? "on" : "off");
     b.addEventListener("click", function () { ON = !ON; sv("on", ON); b.className = "sbtog" + (ON ? " on" : ""); b.innerHTML = "<i></i>ShowBox " + (ON ? "on" : "off"); if (onChange) onChange(); }); return b; }
