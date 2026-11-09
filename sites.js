@@ -136,16 +136,26 @@
     b.addEventListener("click", function () { ON = !ON; sv("on", ON); b.className = "sbtog" + (ON ? " on" : ""); b.innerHTML = "<i></i>ShowBox " + (ON ? "on" : "off"); if (onChange) onChange(); }); return b; }
 
   // ---- title page: details for ShowBox-only titles; the FebBox link is fetched ahead so the tap opens at once ----
-  function prep(t, descEl) {
+  function prep(t, descEl, cb) {
     if (!t || !t.site) return;
     if (t.sb && !t.desc && descEl) SR.read(t.site.url, "detail", function (err, d) { if (d) { t.desc = d.desc || ""; if (descEl.isConnected) descEl.textContent = t.desc; } });
-    if (!t.shareKey && !t.keyBusy) { t.keyBusy = 1; SR.findShare(t.site.url, function (key) { t.keyBusy = 0; t.shareKey = key || ""; t.keyNone = !key; }); }
+    if (t.shareKey || t.keyNone) { if (cb) cb(); return; }
+    if (cb) (t.keyWait = t.keyWait || []).push(cb);
+    if (!t.keyBusy) { t.keyBusy = 1; SR.findShare(t.site.url, function (key) { t.keyBusy = 0; t.shareKey = key || ""; t.keyNone = !key; var w = t.keyWait || []; t.keyWait = null; w.forEach(function (f) { f(); }); }); }
   }
+  // one click: the tab opens during your click (browsers only allow that), then goes to FebBox the moment the link is ready
   function play(t, toast) {
     if (!t || !t.site) return;
-    if (t.shareKey) { window.open("https://www.febbox.com/share/" + t.shareKey, "_blank"); return; }
+    var url = function () { return "https://www.febbox.com/share/" + t.shareKey; };
+    if (t.shareKey) { window.open(url(), "_blank"); return; }
     if (t.keyNone) { toast("ShowBox has no FebBox copy of this right now"); return; }
-    toast("Getting the FebBox link — tap again in a second"); prep(t);
+    var w = null; try { w = window.open("", "_blank"); } catch (e) {}
+    if (w) { try { w.document.write('<title>Opening FebBox…</title><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0b10;color:#e9e4dc;font:600 20px -apple-system,sans-serif">Opening FebBox…</body>'); } catch (e) {} }
+    else toast("Getting the FebBox link…");
+    prep(t, null, function () {
+      if (t.shareKey) { if (w && !w.closed) w.location.href = url(); else window.open(url(), "_blank"); }
+      else { if (w && !w.closed) w.close(); toast("ShowBox has no FebBox copy of this right now"); }
+    });
   }
 
   window.VSB = { on: function () { return ON; }, toggle: toggle, searchInto: searchInto, prep: prep, play: play, label: function (t) { return t && t.site ? '<span class="sbl">ShowBox</span>' : ""; } };
