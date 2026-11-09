@@ -723,3 +723,4 @@ html.desk .row.can-l:hover .rarr.l,html.desk .row.can-r:hover .rarr.r{opacity:1;
 html.desk #detail{background:linear-gradient(90deg,rgba(0,0,0,.78) calc(50% - 480px),var(--bg) calc(50% - 480px),var(--bg) calc(50% + 480px),rgba(0,0,0,.78) calc(50% + 480px));background-attachment:local;cursor:default;}
 html.desk #detail .dart{border-radius:0;}
 html.desk .pc,html.desk .hero,html.desk .btn,html.desk #tabs button,html.desk .chip{cursor:pointer;}
+.endless{height:2px;}

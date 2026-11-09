@@ -251,7 +251,7 @@
   }
   // a swipeable billboard: six picks, the page glow follows the one you're looking at
   function heroEl(s) {
-    var hid = S.hiddenSet(), list = S.heroFor(s).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
+    var hid = S.hiddenSet(), vp = window.VE && VE.heroPool(s), list = (vp && vp.length >= 4 ? vp : S.heroFor(s)).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
     if (s === "home") { var last = S.list("lastHero")[0], k = list.findIndex(function (x) { return x.id === last; }); list = list.slice(k + 1).concat(list.slice(0, k + 1)); S.set("lastHero", [list[0].id]); }
     else list = list.slice().sort(function () { return Math.random() - 0.5; });
     list = list.slice(0, 6);
@@ -303,6 +303,11 @@
       page.appendChild(h("button", "qrprompt", G.heart + "<span><b>Teach Vesper your taste</b><small>Swipe through 20 posters — takes a minute</small></span>" + G.r)).dataset.qr = "1";
     if (!rows.length) page.appendChild(h("div", "empty", "<b>Nothing here yet</b>The show list is still loading."));
     addRows(page, rows);
+    // endless: near the bottom, a few more fresh rows join (different ideas, titles you haven't been shown)
+    if (window.VE && rows.length) { var end = h("div", "endless"), extra = 0;
+      var eo = new IntersectionObserver(function (en) { if (!en[0].isIntersecting || !end.isConnected) return; if (extra >= 60) { eo.disconnect(); end.remove(); return; }
+        var more = S.finalize(VE.more(s, 6)); if (!more.length) { eo.disconnect(); end.remove(); return; } extra += more.length; addRows(page, more); page.appendChild(end); }, { root: $("view"), rootMargin: "900px 0px" });
+      page.appendChild(end); eo.observe(end); }
   }
 
   // ---------- Throwback: American films 2005–2019, one era at a time ----------

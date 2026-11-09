@@ -42,12 +42,12 @@
       ["us_s", "American Series", { objectTypes: ["SHOW"], productionCountries: ["US"] }, 250, "POPULAR", 3000],
       ["gb_m", "British Films", { objectTypes: ["MOVIE"], productionCountries: ["GB"] }, 120, "POPULAR", 3000],
       ["gb_s", "British Series", { objectTypes: ["SHOW"], productionCountries: ["GB"] }, 150, "POPULAR", 1500],
-      ["kr_s", "K-Dramas", { objectTypes: ["SHOW"], productionCountries: ["KR"] }, 220, "POPULAR", 300],
+      ["kr_s", "K-Dramas", { objectTypes: ["SHOW"], productionCountries: ["KR"] }, 450, "POPULAR", 300],
       ["kr_m", "Korean Films", { objectTypes: ["MOVIE"], productionCountries: ["KR"] }, 140, "POPULAR", 1500],
-      ["ani_s", "Anime Series", { objectTypes: ["SHOW"], genres: ["ani"], productionCountries: ["JP"] }, 220, "POPULAR", 500],
+      ["ani_s", "Anime Series", { objectTypes: ["SHOW"], genres: ["ani"], productionCountries: ["JP"] }, 450, "POPULAR", 500],
       ["ani_m", "Anime Films", { objectTypes: ["MOVIE"], genres: ["ani"], productionCountries: ["JP"] }, 90, "POPULAR", 1500],
-      ["in_m", "Indian Films", { objectTypes: ["MOVIE"], productionCountries: ["IN"] }, 250, "POPULAR", 400],
-      ["in_s", "Indian Series", { objectTypes: ["SHOW"], productionCountries: ["IN"] }, 180, "POPULAR", 300],
+      ["in_m", "Indian Films", { objectTypes: ["MOVIE"], productionCountries: ["IN"] }, 700, "POPULAR", 400],
+      ["in_s", "Indian Series", { objectTypes: ["SHOW"], productionCountries: ["IN"] }, 400, "POPULAR", 300],
       ["world_m", "World Cinema", { objectTypes: ["MOVIE"], excludeProductionCountries: ["IN", "US", "GB", "KR", "JP"] }, 160, "POPULAR", 3000],
       ["world_s", "International Series", { objectTypes: ["SHOW"], excludeProductionCountries: ["IN", "US", "GB", "KR", "JP"] }, 140, "POPULAR", 1000],
       ["us_e05", "American Films 2005–2009", { objectTypes: ["MOVIE"], productionCountries: ["US"], releaseYear: { min: 2005, max: 2009 } }, 500, "POPULAR", 9000],
@@ -59,11 +59,42 @@
       ["jp_live", "Japanese Live-Action", { productionCountries: ["JP"], excludeGenres: ["ani"] }, 80, "POPULAR", 1000],
       ["kids", "Kids & Family", { genres: ["fml"] }, 160, "POPULAR", 1000],
       ["docs", "Documentaries", { genres: ["doc"] }, 120, "POPULAR", 1500],
-      ["app_netflix", "On Netflix", { packages: ["nfx"] }, 300, "POPULAR", 800],
-      ["app_amazon", "On Prime Video", { packages: ["prv"] }, 300, "POPULAR", 800],
-      ["app_hotstar", "On JioHotstar", { packages: ["jhs"] }, 300, "POPULAR", 500],
-      ["app_com.apple.appletv", "On Apple TV+", { packages: ["atp"] }, 150, "POPULAR", 500],
-      ["app_com.crunchyroll.webapp", "On Crunchyroll", { packages: ["cru"] }, 300, "POPULAR", 200]
+      ["app_netflix", "On Netflix", { packages: ["nfx"] }, 900, "POPULAR", 800],
+      ["app_amazon", "On Prime Video", { packages: ["prv"] }, 900, "POPULAR", 800],
+      ["app_hotstar", "On JioHotstar", { packages: ["jhs"] }, 800, "POPULAR", 500],
+      ["app_com.apple.appletv", "On Apple TV+", { packages: ["atp"] }, 250, "POPULAR", 500],
+      ["app_com.crunchyroll.webapp", "On Crunchyroll", { packages: ["cru"] }, 500, "POPULAR", 200],
+      // ---- the big catalog (2026-11): every genre, older decades, more countries, deeper top-rated ----
+    ].concat(BIG(year));
+  }
+  // every genre for films and series; decades back to the 70s; 20+ more countries; deeper "best of" lists
+  function BIG(year) {
+    var out = [], G = [["act", "Action"], ["cmy", "Comedy"], ["drm", "Drama"], ["trl", "Thriller"], ["crm", "Crime"], ["fnt", "Fantasy"], ["rma", "Romance"], ["scf", "Sci-Fi"],
+      ["hrr", "Horror"], ["hst", "History"], ["war", "War"], ["doc", "Documentary"], ["fml", "Family"], ["msc", "Music"], ["spt", "Sport"], ["wsn", "Western"], ["rly", "Reality"]];
+    G.forEach(function (g) {
+      if (g[0] !== "rly") out.push(["g_m_" + g[0], g[1] + " Films", { objectTypes: ["MOVIE"], genres: [g[0]] }, 350, "POPULAR", 1500]);
+      if (g[0] !== "wsn") out.push(["g_s_" + g[0], g[1] + " Series", { objectTypes: ["SHOW"], genres: [g[0]] }, 220, "POPULAR", 300]);
+      out.push(["gt_m_" + g[0], "Best " + g[1] + " Films", { objectTypes: ["MOVIE"], genres: [g[0]], imdbScore: { min: 7.2 } }, 150, "IMDB_SCORE", 8000]);
+    });
+    [[1970, 1989, 250, 8000], [1990, 1999, 400, 6000], [2000, 2004, 400, 5000]].forEach(function (d) {
+      out.push(["dec_m_" + d[0], "Films " + d[0] + "–" + d[1], { objectTypes: ["MOVIE"], releaseYear: { min: d[0], max: d[1] } }, d[2], "POPULAR", d[3]]);
+      out.push(["dec_s_" + d[0], "Series " + d[0] + "–" + d[1], { objectTypes: ["SHOW"], releaseYear: { min: d[0], max: d[1] } }, 120, "POPULAR", 2000]);
+    });
+    [["fr", ["FR"], "French"], ["es", ["ES"], "Spanish"], ["de", ["DE"], "German"], ["it", ["IT"], "Italian"], ["nordic", ["SE", "DK", "NO", "FI", "IS"], "Nordic"],
+     ["cn", ["CN"], "Chinese"], ["hk", ["HK"], "Hong Kong"], ["tw", ["TW"], "Taiwanese"], ["th", ["TH"], "Thai"], ["tr", ["TR"], "Turkish"], ["latam", ["MX", "AR", "BR", "CO", "CL"], "Latin American"],
+     ["au", ["AU", "NZ"], "Australian"], ["ca", ["CA"], "Canadian"], ["ie", ["IE"], "Irish"], ["id", ["ID", "PH", "MY"], "Southeast Asian"], ["pl", ["PL", "BE", "NL"], "European"], ["il", ["IL", "IR", "EG", "AE"], "Middle Eastern"]
+    ].forEach(function (c) {
+      out.push(["c_m_" + c[0], c[2] + " Films", { objectTypes: ["MOVIE"], productionCountries: c[1] }, 140, "POPULAR", 300]);
+      out.push(["c_s_" + c[0], c[2] + " Series", { objectTypes: ["SHOW"], productionCountries: c[1] }, 90, "POPULAR", 150]);
+    });
+    out.push(["acc_m2", "Acclaimed Films", { objectTypes: ["MOVIE"], imdbScore: { min: 7.2 } }, 700, "IMDB_SCORE", 15000],
+      ["acc_s2", "Acclaimed Series", { objectTypes: ["SHOW"], imdbScore: { min: 7.6 } }, 450, "IMDB_SCORE", 4000],
+      ["gems_m", "Hidden Gems", { objectTypes: ["MOVIE"], imdbScore: { min: 7.3 } }, 400, "TRENDING", 2000],
+      ["new_m", "New Films", { objectTypes: ["MOVIE"], releaseYear: { min: year - 2 } }, 400, "POPULAR", 200],
+      ["new_s", "New Series", { objectTypes: ["SHOW"], releaseYear: { min: year - 2 } }, 300, "POPULAR", 100]);
+    return out;
+  }
+  function _unused() { return [
     ];
   }
 
