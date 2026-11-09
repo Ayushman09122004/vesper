@@ -724,3 +724,14 @@ html.desk #detail{background:linear-gradient(90deg,rgba(0,0,0,.78) calc(50% - 48
 html.desk #detail .dart{border-radius:0;}
 html.desk .pc,html.desk .hero,html.desk .btn,html.desk #tabs button,html.desk .chip{cursor:pointer;}
 .endless{height:2px;}
+
+#who.rgp{gap:16px;text-align:center;justify-content:safe center;overflow-y:auto;}
+#who.rgp h2{max-width:520px;}
+#who.rgp .sub-h{color:var(--mut);font-size:14px;max-width:420px;line-height:1.4;}
+#who .rgs{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:560px;}
+#who .rg{padding:9px 14px;border-radius:20px;background:var(--bg3);color:var(--fg,#fff);font-size:15px;font-weight:600;border:2px solid transparent;transition:transform .15s,background .15s;}
+#who .rg.on{background:#fff;color:#111;}
+#who .rg:active{transform:scale(.95);}
+#who .rgb{display:flex;flex-direction:column;gap:10px;width:100%;max-width:280px;margin-top:8px;}
+#who .rgb .btn{width:100%;flex:none;}
+html.desk #who .rg:hover{transform:scale(1.05);}

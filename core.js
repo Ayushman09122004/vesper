@@ -94,6 +94,17 @@
       ["new_s", "New Series", { objectTypes: ["SHOW"], releaseYear: { min: year - 2 } }, 300, "POPULAR", 100]);
     return out;
   }
+  // ~2,000 corners, walked through a stride at a time — about 30 a day, a full lap every ~2 months
+  function explore(dayN, year) {
+    var G = ["act", "cmy", "drm", "trl", "crm", "fnt", "rma", "scf", "hrr", "hst", "war", "doc", "fml", "msc", "spt", "ani", "rly"];
+    var C = [["US"], ["IN"], ["KR"], ["JP"], ["GB"], ["FR"], ["ES"], ["DE"], ["IT"], ["CN", "HK", "TW"], ["TH", "ID", "PH"], ["TR"], ["MX", "AR", "BR", "CO"], ["SE", "DK", "NO", "FI"], ["AU", "NZ", "CA", "IE"]];
+    var D = [[1970, 1994], [1995, 2004], [2005, 2012], [2013, 2018], [2019, year]], T = ["MOVIE", "SHOW"], all = [];
+    G.forEach(function (g) { C.forEach(function (c) { D.forEach(function (d) { T.forEach(function (ty) {
+      all.push(["x_" + g + "_" + c.join("") + "_" + d[0] + "_" + ty, g + " · " + c.join("/") + " · " + d[0] + "–" + d[1], { objectTypes: [ty], genres: [g], productionCountries: c, releaseYear: { min: d[0], max: d[1] } }]); }); }); }); });
+    var out = [], n = all.length, start = (dayN * 31) % n;
+    for (var i = 0; i < 30; i++) out.push(all[(start + i * 67) % n]);   // spread out, different every day
+    return out;
+  }
   function _unused() { return [
     ];
   }
@@ -166,6 +177,19 @@
       tick(S[1]);
     }
 
+    // 1b) explore: every day a different set of corners (genre × country × era × films/series), so new titles keep arriving
+    var dayN = Math.floor(now.getTime() / 864e5), EX = explore(dayN, year);
+    for (var e = 0; e < EX.length; e++) {
+      var X = EX[e];
+      try {
+        var dx = await gql(Q_SEG, { first: 100, after: null, filter: Object.assign({ packages: OURS, monetizationTypes: SUBS }, X[2]), sortBy: "POPULAR" }, opts);
+        var xids = [];
+        dx.popularTitles.edges.forEach(function (ed) { var t = add(ed.node); if (t && decent(t, 250) && xids.indexOf(t.id) < 0) { xids.push(t.id); if (t.segs.indexOf("x") < 0) t.segs.push("x"); } });
+        segs[X[0]] = { label: X[1], ids: xids };
+      } catch (err) { /* skip this corner today */ }
+    }
+    tick("Exploring");
+
     // 2) new on your apps — the last 7 days, incl. new seasons
     var arrivals = [], seenArr = {};
     for (var k = 0; k < 7; k++) {
@@ -221,7 +245,33 @@
     }
     tick("Weather library");
 
+    var today = now.toISOString().slice(0, 10), prevT = {};
+    ((opts.prev && opts.prev.titles) || []).forEach(function (t) { prevT[t.id] = t; });
+    var first = !Object.keys(prevT).some(function (id) { return prevT[id].added; });   // the very first growing run: what's already here isn't "new"
+    Object.keys(titles).forEach(function (id) { var t = titles[id], p = prevT[id]; t.added = p ? p.added || "2026-01-01" : first ? "2026-01-01" : today; t.ck = today; });
+    // titles from earlier days that today's lists didn't include: kept, and about a fifth of them re-checked each day
+    var carry = Object.keys(prevT).filter(function (id) { return !titles[id] && (prevT[id].avail || []).length; }).map(function (id) { var t = Object.assign({}, prevT[id]); t.segs = ["keep"]; if (!t.added) t.added = "2026-01-01"; return t; });
+    carry.sort(function (a, b) { return (a.ck || "") < (b.ck || "") ? -1 : 1; });
+    var recheck = carry.slice(0, Math.ceil(carry.length / 5) + 40), gone = {};
+    for (var ri = 0; ri < recheck.length; ri += 40) {
+      var ch = recheck.slice(ri, ri + 40);
+      try {
+        var oq = "{" + ch.map(function (t, j) { return "t" + j + ":node(id:\"" + t.id + "\"){... on MovieOrShow{offers(country:IN,platform:WEB){monetizationType package{shortName}}}}"; }).join(" ") + "}";
+        var od2 = await gql(oq, {}, opts);
+        ch.forEach(function (t, j) { var n = od2["t" + j]; if (!n) return; var apps = {};
+          (n.offers || []).forEach(function (o) { var a = FAMILY[o.package && o.package.shortName]; if (a && SUBS.indexOf(o.monetizationType) >= 0) apps[a] = 1; });
+          var av = Object.keys(apps); if (!av.length) gone[t.id] = 1; else { t.avail = av; Object.keys(t.links || {}).forEach(function (k) { if (!apps[k]) delete t.links[k]; }); } t.ck = today; });
+      } catch (err) { /* try these again tomorrow */ }
+    }
+    carry.forEach(function (t) { if (!gone[t.id]) titles[t.id] = t; });
+    tick("Keeping " + carry.length);
     var list = Object.keys(titles).map(function (id) { return titles[id]; }).filter(function (t) { return t.segs.length; });
+    // keep it a sensible size for TVs and phones: when it grows past the cap, the weakest older titles step out
+    var CAP = 12000;
+    if (list.length > CAP) {
+      list.forEach(function (t) { t._k = (t.segs[0] !== "keep" ? 100 : 0) + (t.imdb || 6) + Math.log(1 + (t.votes || 0)) / 2 + Math.min(4, Math.log(1 + (t.pop || 0))) + (t.added === today ? 50 : 0); });
+      list.sort(function (a, b) { return b._k - a._k; }); list = list.slice(0, CAP); list.forEach(function (t) { delete t._k; });
+    }
 
     // 4) Originals: streaming on exactly one service across India, US and UK (only new titles are checked)
     var prevOrig = {}, prevChecked = {};

@@ -962,6 +962,7 @@
       '<button class="opt" data-padd>' + S.avatar(null) + "<span>Add a person</span></button>" +
       (ps.length ? '<button class="opt" data-pren><span style="padding-left:44px">Rename ' + esc((S.profile() || {}).name || "") + "</span></button>" : "") +
       (ps.length > 1 ? '<button class="opt red" data-prem><span style="padding-left:44px">Remove ' + esc((S.profile() || {}).name || "") + "</span></button>" : "") +
+      '<h4>I like watching</h4><button class="opt" data-rgedit><span>' + esc(regionLabel()) + "</span><small>Change</small></button>" +
       "<h4>Play on first</h4>" + [["auto", "Best available"]].concat(S.APPS.map(function (a) { return [a, LABEL[a]]; })).map(function (x) {
         return '<button class="opt' + (fav === x[0] ? " on" : "") + '" data-fav="' + x[0] + '">' + (LOGO[x[0]] ? '<img src="' + LOGO[x[0]] + '">' : '<span style="flex:none;width:28px"></span>') + "<span>" + x[1] + "</span></button>"; }).join("") +
       '<h4>Weather</h4><button class="opt" data-sheet="place">' + G.pin + "<span>" + esc(S.place().name) + "</span><small>Change</small></button>" +
@@ -1177,6 +1178,26 @@
     btn.dataset.mute = on ? "0" : "1"; btn.innerHTML = on ? G.sound : G.muted; buzz();
   }
 
+  // ---------- what each person likes watching (asked once per profile; changeable in My Vesper) ----------
+  function regionsAsked() { return S.state[S.key("regions")] != null; }
+  function regionPicker(done, inSheetMode) {
+    var RG = (window.VEMake && VEMake.REGIONS) || [], cur = (S.state[S.key("regions")] || []).filter(function (x) { return x !== "ALL"; }), sel = {};
+    cur.forEach(function (k) { sel[k] = 1; });
+    var w = h("div"); w.id = "who"; w.className = "rgp"; document.body.appendChild(w);
+    var me = S.profile();
+    w.innerHTML = "<h2>" + (me ? esc(me.name) + ", what" : "What") + " do you like watching?</h2><div class=\"sub-h\">Pick as many as you like — Vesper leans your rows this way. Everything else still turns up now and then.</div>" +
+      '<div class="rgs">' + RG.map(function (r) { return '<button class="rg' + (sel[r[0]] ? " on" : "") + '" data-rg="' + r[0] + '">' + esc(r[1]) + "</button>"; }).join("") + "</div>" +
+      '<div class="rgb"><button class="btn play" data-rgok>Continue</button><button class="btn" data-rgall>A bit of everything</button></div>';
+    function fin(v) { S.set("regions", v); w.remove(); if (window.VE) VE.reset && VE.reset(); done && done(); }
+    w.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-rg]"); if (b) { var k = b.dataset.rg; if (sel[k]) delete sel[k]; else sel[k] = 1; b.classList.toggle("on", !!sel[k]); return; }
+      if (e.target.closest("[data-rgok]")) { var v = Object.keys(sel); return fin(v.length ? v : ["ALL"]); }
+      if (e.target.closest("[data-rgall]")) return fin(["ALL"]);
+    });
+  }
+  function regionLabel() { var r = (S.state[S.key("regions")] || []).filter(function (x) { return x !== "ALL"; }), RG = (window.VEMake && VEMake.REGIONS) || [];
+    return r.length ? RG.filter(function (x) { return r.indexOf(x[0]) >= 0; }).map(function (x) { return x[1]; }).join(", ") : "A bit of everything"; }
+
   // ---------- Who's watching ----------
   function whoIsWatching(done) {
     var ps = S.profiles(), w = h("div"); w.id = "who"; document.body.appendChild(w);
@@ -1187,11 +1208,11 @@
     paint();
     w.addEventListener("click", function (e) {
       var b = e.target.closest("[data-p]");
-      if (b) { S.useProfile(b.dataset.p); w.remove(); done(); return; }
+      if (b) { S.useProfile(b.dataset.p); w.remove(); if (!regionsAsked()) return regionPicker(done); done(); return; }
       if (e.target.closest("[data-add]")) {
         w.innerHTML = '<h2>Who\'s this?</h2><input maxlength="18" placeholder="Name"><button class="btn play" style="width:200px;flex:none">Continue</button>';
         var inp = w.querySelector("input"); inp.focus();
-        function ok() { var v = inp.value.trim(); if (!v) return; var id = S.addProfile(v); S.useProfile(id); w.remove(); done(); }
+        function ok() { var v = inp.value.trim(); if (!v) return; var id = S.addProfile(v); S.useProfile(id); w.remove(); regionPicker(done); }
         w.querySelector("button").onclick = ok; inp.addEventListener("keydown", function (e2) { if (e2.key === "Enter") ok(); });
       }
     });
@@ -1200,7 +1221,7 @@
   // ---------- one tap handler for everything ----------
   document.addEventListener("click", function (e) {
     var fb = e.target.closest("[data-feb]"); if (fb && window.VSB) { e.stopPropagation(); return VSB.play(S.T[fb.dataset.feb], toast); }
-    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-sync],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
+    var el = e.target.closest("[data-play],[data-list],[data-like],[data-dislike],[data-share],[data-close],[data-dt],[data-seasons],[data-season],[data-tab],[data-go],[data-sheet],[data-pick],[data-sync],[data-ci],[data-eyear],[data-era],[data-roulette],[data-upnext],[data-qr],[data-tmax],[data-together],[data-tpart],[data-qd],[data-trailer],[data-tclose],[data-yt],[data-mute],[data-more],[data-similar],[data-all],[data-nh],[data-wx],[data-mood],[data-prof],[data-padd],[data-pren],[data-prem],[data-fav],[data-clear],[data-rgedit],.ep,.pc,.wide,.nh,.li,.hero,.toprez");
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
@@ -1261,8 +1282,9 @@
     if (D.nh) { arg = D.nh; return rerender(); }
     if (D.wx) { setPref("wx", D.wx); if (D.wx === "live") S.fetchWeather(true).then(rerender); return rerender(); }
     if (D.mood) return openMood(D.mood);
-    if (D.prof) { S.useProfile(D.prof); closeSheet(); noted = false; return show("home", "home"); }
-    if (D.padd != null) return nameSheet("Add a person", "", function (v) { var id = S.addProfile(v); S.useProfile(id); noted = false; show("home", "home"); toast("Hi, " + v); });
+    if (D.rgedit != null) { closeSheet(); return regionPicker(function () { show("home", "home"); toast("Got it — your rows will lean " + regionLabel()); }); }
+    if (D.prof) { S.useProfile(D.prof); closeSheet(); noted = false; if (!regionsAsked()) return regionPicker(function () { show("home", "home"); }); return show("home", "home"); }
+    if (D.padd != null) return nameSheet("Add a person", "", function (v) { var id = S.addProfile(v); S.useProfile(id); noted = false; regionPicker(function () { show("home", "home"); toast("Hi, " + v); }); });
     if (D.pren != null) { var me = S.profile(); return me && nameSheet("Rename", me.name, function (v) { S.renameProfile(me.id, v); rerender(); }); }
     if (D.prem != null) { var pr = S.profile(); if (!pr) return; if (el._sure) { S.removeProfile(pr.id); closeSheet(); noted = false; return show("home", "home"); }
       el._sure = 1; el.querySelector("span").textContent = "Tap again to remove " + pr.name; return; }
@@ -1350,7 +1372,7 @@
     S.load(cat); loadTrailers();
     var go = function () { show("home", "home"); setTimeout(function () { $("boot").classList.add("out"); }, 60); };
     S.fetchWeather(false).catch(function () {});
-    if (S.profiles().length > 1) { $("boot").classList.add("out"); whoIsWatching(go); } else go();
+    if (S.profiles().length > 1) { $("boot").classList.add("out"); whoIsWatching(go); } else if (!regionsAsked()) { $("boot").classList.add("out"); regionPicker(go); } else go();
   }
   // opened in Safari instead of from the Home Screen: show how to install
   var standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;

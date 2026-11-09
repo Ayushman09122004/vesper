@@ -24,7 +24,7 @@
     NAMES = null;
   };
   // personal things live per profile ("mylist@p2"); settings like weather and favourite service are shared
-  var PERSONAL = { mylist: 1, watched: 1, recent: 1, queries: 1, likes: 1, dislikes: 1, viewed: 1, shown: 1, trios: 1, lastHero: 1 };
+  var PERSONAL = { mylist: 1, watched: 1, recent: 1, queries: 1, likes: 1, dislikes: 1, viewed: 1, shown: 1, trios: 1, lastHero: 1, regions: 1 };
   V.key = function (k) { return PERSONAL[k] && V.state.profile ? k + "@" + V.state.profile : k; };
   function list(k) { return V.state[V.key(k)] || []; }
   V.list = list;
