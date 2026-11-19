@@ -244,11 +244,59 @@
     var wide = window.VDESK && t.backdrop; if (wide) el.classList.add("wideh");
     el.innerHTML = '<img class="p" decoding="async"' + (first ? ' fetchpriority="high"' : ' loading="lazy"') + ' src="' + (wide ? S.bd(t, "s1440") : S.po(t, "s718")) + '" onload="this.classList.add(\'ok\')" onerror="vImgErr(this)"><div class="sh"></div>' +
       (a ? '<img class="svc" src="' + LOGO[a] + '">' : "") + '<div class="inf">' +
-      (kicker ? '<div class="kick">' + esc(kicker) + "</div>" : "") + '<div class="nm">' + esc(t.title) + '</div><div class="line">' +
-      genreWords(t).map(esc).join('<i class="dot"></i>') + "</div>" +
-      '<div class="btns"><button class="btn play" data-play="' + t.id + '">' + G.play + (S.pickApp(t) ? "Play" : "Soon") + '</button><button class="btn ghost" data-list="' + t.id + '">' + (inL ? G.check : G.plus) + "My List</button></div></div>";
+      (kicker ? '<div class="kick">' + esc(kicker) + "</div>" : "") + '<div class="nm">' + esc(t.title) + "</div>" +
+      (wide ? '<div class="line bmeta">' + metaBits(t) + "</div>" + (t.desc ? '<p class="bdesc">' + esc(t.desc) + "</p>" : "")
+        : '<div class="line">' + genreWords(t).map(esc).join('<i class="dot"></i>') + "</div>") +
+      '<div class="btns"><button class="btn play" data-play="' + t.id + '">' + G.play + (S.pickApp(t) ? "Play" : "Soon") + "</button>" +
+      (wide ? '<button class="btn ghost binfo">' + G.info + 'More Info</button><button class="rb" data-list="' + t.id + '" title="My List">' + (inL ? G.check : G.plus) + "</button>"
+        : '<button class="btn ghost" data-list="' + t.id + '">' + (inL ? G.check : G.plus) + "My List</button>") + "</div></div>" +
+      (wide ? bchip(t) + '<button class="bbm" data-bbm="1" title="Sound">' + G.muted + "</button>" : "");
     return el;
   }
+  // laptop billboard, Netflix-style: "Series · Thriller · 2018 · 5 Seasons [UA16+]", a logline, a Top 10 / IMDb chip
+  function metaBits(t) {
+    return [t.type === "SHOW" ? "Series" : "Film", genreWords(t)[0], t.year, S.length(t)].filter(Boolean).map(function (x) { return "<span>" + esc(x) + "</span>"; }).join('<i class="dot"></i>') +
+      (t.cert ? '<span class="box">' + esc(t.cert) + "</span>" : "");
+  }
+  function bchip(t) {
+    var r = rankOf(t); if (r) return '<div class="bchip"><b>TOP<i>10</i></b>' + esc(r) + "</div>";
+    if (t.imdb >= 7.8) return '<div class="bchip"><b class="im">IMDb</b>' + t.imdb.toFixed(1) + (t.votes > 200000 ? " · loved by " + Math.round(t.votes / 1000) + "k people" : "") + "</div>";
+    var a = S.arrivalOf(t); return a ? '<div class="bchip"><b class="nw">NEW</b>' + (a.season > 1 ? "New season" : "Just added") + "</div>" : "";
+  }
+  // only show a YouTube trailer once YouTube says it's really playing (a blocked or missing video never blacks out the picture)
+  function ytWatch(f, cb) {
+    var done = false;
+    function onMsg(e) { if (e.source !== f.contentWindow) return; var d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (x) { return; }
+      var st = d && (d.event === "onStateChange" ? d.info : d.info && d.info.playerState);
+      if (st === 1 && !done) { done = true; window.removeEventListener("message", onMsg); cb(); } }
+    window.addEventListener("message", onMsg);
+    f.addEventListener("load", function () { var n = 0, iv = setInterval(function () {
+      if (done || !f.isConnected || ++n > 24) { clearInterval(iv); if (!done) window.removeEventListener("message", onMsg); return; }
+      try { f.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*"); } catch (x) {} }, 500); });
+  }
+  // laptop billboard trailer: starts silently a few seconds after a slide settles; the sound button turns it up
+  var bbT = null, bbMuted = true;
+  function bbStop(box) { clearTimeout(bbT); if (!box) return; box._pend = 0; qa(".hero .bbv", box).forEach(function (x) { x.remove(); }); qa(".hero.playing", box).forEach(function (x) { x.classList.remove("playing"); }); box._playing = 0; }
+  function bbPlay(box, el, t) {
+    bbStop(box); var id = trailerOf(t); if (!id || !window.VDESK) return;
+    box._pend = 1;
+    bbT = setTimeout(function () { box._pend = 0;
+      if (!el.isConnected || $("detail").classList.contains("on") || $("view").scrollTop > 250 || document.hidden) return;
+      (box._done = box._done || {})[t.id] = 1;
+      var w = h("div", "bbv"), f = h("iframe"); f.setAttribute("allow", "autoplay; encrypted-media"); f.tabIndex = -1;
+      f.src = "https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&start=4";
+      w.appendChild(f); el.insertBefore(w, el.querySelector(".sh")); box._playing = 1;
+      ytWatch(f, function () { setTimeout(function () { if (!w.isConnected) return; el.classList.add("playing");
+        if (!bbMuted) f.contentWindow.postMessage(JSON.stringify({ event: "command", func: "unMute", args: [] }), "*"); }, 1400); });
+      // back to the picture after ~50 seconds, so the billboard keeps moving
+      bbT = setTimeout(function () { el.classList.remove("playing"); setTimeout(function () { w.remove(); box._playing = 0; }, 700); }, 52000);
+    }, 3500);
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-bbm]"); if (!b) return; e.stopPropagation();
+    bbMuted = !bbMuted; qa("[data-bbm]").forEach(function (x) { x.innerHTML = bbMuted ? G.muted : G.sound; });
+    qa(".hero .bbv iframe").forEach(function (f) { f.contentWindow.postMessage(JSON.stringify({ event: "command", func: bbMuted ? "mute" : "unMute", args: [] }), "*"); });
+  }, true);
   // a swipeable billboard: six picks, the page glow follows the one you're looking at
   function heroEl(s) {
     var hid = S.hiddenSet(), vp = window.VE && VE.heroPool(s), list = (vp && vp.length >= 4 ? vp : S.heroFor(s)).filter(function (t) { return !hid[t.id] && t.poster; }); if (!list.length) return null;
@@ -261,16 +309,19 @@
     box.appendChild(track); if (list.length > 1) box.appendChild(dots);
     var cur = 0, touching = false;
     function at() { return Math.round(track.scrollLeft / (track.firstChild.offsetWidth + 12)); }
-    track.addEventListener("scroll", function () { var i = at(); if (i !== cur && list[i]) { cur = i; setAmb(list[i]); [].forEach.call(dots.children, function (d, j) { d.classList.toggle("on", j === i); }); buzz(); } }, { passive: true });
+    track.addEventListener("scroll", function () { var i = at(); if (i !== cur && list[i]) { cur = i; setAmb(list[i]); [].forEach.call(dots.children, function (d, j) { d.classList.toggle("on", j === i); }); buzz(); if (window.VDESK) bbPlay(box, track.children[i], list[i]); } }, { passive: true });
     track.addEventListener("touchstart", function () { touching = true; }, { passive: true });
     track.addEventListener("touchend", function () { touching = false; }, { passive: true });
     clearInterval(heroTimer);
     heroTimer = setInterval(function () {
       if (!box.isConnected) return clearInterval(heroTimer);
-      if (touching || document.hidden || $("detail").classList.contains("on") || $("view").scrollTop > 200) return;
+      if (window.VDESK && box._playing && ($("view").scrollTop > 250 || $("detail").classList.contains("on") || document.hidden)) bbStop(box);
+      if (window.VDESK && !box._playing && !box._pend && list[cur] && !(box._done || {})[list[cur].id] && trailerOf(list[cur]) && $("view").scrollTop <= 200 && !document.hidden && !$("detail").classList.contains("on")) return bbPlay(box, track.children[cur], list[cur]);
+      if (touching || box._playing || box.matches(":hover") || document.hidden || $("detail").classList.contains("on") || $("view").scrollTop > 200) return;
       var n = (cur + 1) % list.length; track.scrollTo({ left: n * (track.firstChild.offsetWidth + 12), behavior: "smooth" });
     }, 9000);
     setAmb(list[0]);
+    if (window.VDESK) setTimeout(function () { bbPlay(box, track.children[0], list[0]); }, 400);
     return box;
   }
   // every open feels new: inside each row, titles get a gentle shuffle (popular ones still lean to the front);
@@ -1275,7 +1326,7 @@
   var curT = null;
   var fromRect = null;
   function openDetail(id) {
-    var t = S.T[id]; if (!t) return; curT = t; S.markViewed(t.id); buzz();
+    var t = S.T[id]; if (!t) return; if (window.VDESK) { bbStop(document); if (window.VHOV) VHOV.hide(true); } curT = t; S.markViewed(t.id); buzz();
     var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t), rank = rankOf(t), arr = S.arrivalOf(t);
     var others = apps.filter(function (a) { return a !== best; }), inL = S.inList("mylist", t.id);
     var meta = [t.year ? "<span>" + t.year + "</span>" : "", t.cert ? '<span class="box">' + esc(t.cert) + "</span>" : "", "<span>" + esc(S.length(t)) + "</span>", '<span class="box">HD</span>', t.imdb ? '<span class="imdb">IMDb ' + t.imdb.toFixed(1) + "</span>" : ""].filter(Boolean).join("");
@@ -1405,6 +1456,8 @@
 
   // ---------- trailers (YouTube; found daily by tools/trailers.mjs) ----------
   var TR = {};
+  window.VUI = { trailer: function (t) { return trailerOf(t); }, open: function (id, rect) { fromRect = rect || null; openDetail(id); }, meta: function (t) { return metaBits(t); }, ytWatch: function (f, cb) { ytWatch(f, cb); },
+    rank: function (t) { return rankOf(t); }, G: G, buzz: function () { buzz(); } };
   function trailerOf(t) { return t && TR[t.id] || ""; }
   function ytSearch(t) { return "https://www.youtube.com/results?search_query=" + encodeURIComponent(t.title + (t.year ? " " + t.year : "") + " official trailer"); }
   function openTrailer(t) {
@@ -1505,7 +1558,7 @@
     if (D.remind) { var r = S.toggle("mylist", D.list, true); buzz(); toast(r ? "We'll keep it at the top of My List" : "Reminder removed"); el.innerHTML = r ? G.check + "Reminded" : G.bell + "Remind Me"; return; }
     if (D.list) { var on = S.toggle("mylist", D.list, true), lt = S.T[D.list], la = lt && (lt.orig && (lt.avail || []).indexOf(lt.orig) >= 0 ? lt.orig : S.pickApp(lt)); buzz();
       if (on && la) toast("Added to My List", "Add in " + LABEL[la].replace("Prime Video", "Prime") + " too ›", function () { openTitlePage(lt); }); else toast(on ? "Added to My List" : "Removed from My List");
-      if (el.closest(".hero,.nhb")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); if (tab === "mylist" && !curT) rerender(); return; }
+      if (el.classList.contains("rb") || el.classList.contains("hb")) el.innerHTML = on ? G.check : G.plus; else if (el.closest(".hero,.nhb")) el.innerHTML = (on ? G.check : G.plus) + "My List"; refreshActs(); if (tab === "mylist" && !curT) rerender(); return; }
     if (D.like) { var l = S.like(D.like); buzz(); toast(l ? "Got it — more like this" : "Like removed"); refreshActs(); return; }
     if (D.dislike) { var n = S.dislike(D.dislike); buzz(); toast(n ? "Hidden — we won't show it again" : "It's back"); refreshActs(); return; }
     if (D.share) { var st = S.T[D.share], a = S.pickApp(st); if (navigator.share) navigator.share({ title: st.title, url: a ? S.playUrl(a, st).replace("/watch/", "/title/") : undefined }).catch(function () {}); return; }

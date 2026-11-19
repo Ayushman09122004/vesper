@@ -794,3 +794,65 @@ html.desk #who .rg:hover{transform:scale(1.05);}
 }
 html.desk .aci,html.desk .sfilt button{cursor:pointer;}
 html.desk .aci:hover{background:rgba(255,255,255,.07);}
+
+/* ---------- v31 laptop: Netflix-style billboard (facts line, logline, chip, trailer) + hover preview cards ---------- */
+html.desk .hero.wideh .bmeta{display:flex;align-items:center;flex-wrap:wrap;gap:0;font-size:15px;font-weight:600;color:#f1f1f4;}
+html.desk .hero.wideh .bmeta .box{margin-left:10px;padding:1px 6px;border:1px solid rgba(255,255,255,.55);border-radius:4px;font-size:12px;font-weight:700;}
+html.desk .hero.wideh .bdesc{margin:12px 0 0;max-width:500px;font-size:15.5px;line-height:1.5;color:rgba(255,255,255,.88);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;transition:opacity .6s var(--e),max-height .6s var(--e);max-height:5em;}
+html.desk .hero.wideh .btns{gap:12px;align-items:center;}
+html.desk .hero.wideh .btns .btn.ghost.binfo{background:rgba(110,110,125,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+html.desk .hero.wideh .btns .btn svg{width:22px;height:22px;}
+html.desk .hero .rb,.hov .hb{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(20,20,28,.45);color:#fff;transition:border-color .2s,transform .2s var(--e),background .2s;}
+html.desk .hero .rb:hover,.hov .hb:hover{border-color:#fff;transform:scale(1.08);}
+html.desk .hero .rb svg{width:22px;height:22px;}
+html.desk .hero .bchip{position:absolute;right:0;bottom:46px;display:flex;align-items:center;gap:10px;padding:8px 16px 8px 12px;border-radius:10px 0 0 10px;background:rgba(10,10,16,.6);border-left:3px solid rgba(255,255,255,.8);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-size:14px;font-weight:600;color:#fff;z-index:2;}
+html.desk .hero .bchip b{display:flex;flex-direction:column;align-items:center;justify-content:center;width:28px;height:30px;border-radius:4px;background:#e50914;font-size:7.5px;font-weight:900;line-height:1;letter-spacing:.4px;}
+html.desk .hero .bchip b i{font-style:normal;font-size:13px;}
+html.desk .hero .bchip b.im{width:auto;padding:0 6px;height:22px;background:#f5c518;color:#000;font-size:11px;}
+html.desk .hero .bchip b.nw{width:auto;padding:0 6px;height:22px;font-size:10px;}
+html.desk .hero .bbm{position:absolute;right:20px;bottom:104px;z-index:3;width:42px;height:42px;border-radius:50%;border:1.5px solid rgba(255,255,255,.6);background:rgba(10,10,16,.35);color:#fff;
+  display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .4s;cursor:pointer;}
+html.desk .hero .bbm svg{width:20px;height:20px;}
+html.desk .hero.playing .bbm{opacity:1;pointer-events:auto;}
+html.desk .hero .bbv{position:absolute;inset:0;overflow:hidden;pointer-events:none;container-type:size;}
+html.desk .hero .bbv iframe{position:absolute;left:50%;top:50%;width:max(118cqw,calc(118cqh * 16 / 9));height:max(118cqh,calc(118cqw * 9 / 16));transform:translate(-50%,-50%);border:0;opacity:0;transition:opacity 1s var(--e);}
+html.desk .hero.playing .bbv iframe{opacity:1;}
+html.desk .hero.playing img.p{opacity:0!important;transition:opacity 1s var(--e);}
+html.desk .hero.playing .bdesc{opacity:0;max-height:0;}
+html.desk .hero .inf,html.desk .hero .sh,html.desk .hero .svc{z-index:1;}
+
+/* hover preview card */
+.hov{position:fixed;z-index:60;border-radius:10px;overflow:hidden;background:#181820;box-shadow:0 22px 60px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.06);
+  transform:scale(var(--s0,.5));opacity:0;transition:transform .32s var(--e),opacity .22s;}
+.hov.on{transform:scale(1);opacity:1;}
+.hov .hart{position:relative;aspect-ratio:16/9;overflow:hidden;cursor:pointer;background:hsl(var(--gh),30%,14%);}
+.hov .hart img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .8s var(--e);}
+.hov .hart iframe{position:absolute;left:-12%;top:-18%;width:124%;height:136%;border:0;opacity:0;pointer-events:none;transition:opacity .8s var(--e);}
+.hov.vid .hart iframe{opacity:1;}.hov.vid .hart img{opacity:0;}
+.hov .hsh{position:absolute;inset:0;background:linear-gradient(0deg,rgba(24,24,32,.95),rgba(24,24,32,0) 46%);pointer-events:none;}
+.hov .hnm{position:absolute;left:14px;right:56px;bottom:10px;font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.15;text-shadow:0 2px 10px rgba(0,0,0,.6);transition:opacity .5s;}
+.hov.vid .hnm{opacity:.0;}
+.hov .hmute{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);background:rgba(0,0,0,.35);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.hov .hmute svg{width:16px;height:16px;}
+.hov .hin{padding:12px 14px 15px;}
+.hov .hbt{display:flex;align-items:center;gap:8px;}
+.hov .hbt i{flex:1;}
+.hov .hb{width:38px;height:38px;cursor:pointer;}
+.hov .hb svg{width:18px;height:18px;}
+.hov .hb.play{background:#fff;border-color:#fff;color:#000;}
+.hov .hb.play svg{margin-left:2px;}
+.hov .hb.play.feb{background:linear-gradient(90deg,#e0884a,#f3a46b);border-color:#f3a46b;color:#1a0d05;}
+.hov .hb.on{color:#ff6b8b;border-color:#ff6b8b;}
+.hov .hmeta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 0;margin-top:12px;font-size:13px;font-weight:600;color:#cfcfd6;}
+.hov .hmeta .dot{display:inline-block;width:3px;height:3px;border-radius:50%;background:#888;margin:0 7px;}
+.hov .hmeta .box{margin-left:8px;padding:0 5px;border:1px solid rgba(255,255,255,.45);border-radius:3px;font-size:11px;}
+.hov .hmeta b{margin-right:10px;font-weight:800;}
+.hov .hmeta .hi{color:#f5c518;}.hov .hmeta .ht{color:#ff5a63;}
+.hov .htags{margin-top:8px;font-size:13px;color:#fff;}
+.hov .htags .dot{display:inline-block;width:3px;height:3px;border-radius:50%;background:#777;margin:0 8px;vertical-align:middle;}
+.hov .hsoon{margin-top:8px;font-size:12px;color:var(--dim);}
+
+/* posters shimmer softly until their picture arrives (phone + laptop) */
+@keyframes vshim{0%{background-position:150% 0}100%{background-position:-50% 0}}
+.pc:not(:has(img.p.ok)){background:linear-gradient(100deg,#15151d 30%,#22222d 50%,#15151d 70%);background-size:220% 100%;animation:vshim 1.4s linear 6;}
