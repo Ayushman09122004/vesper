@@ -567,23 +567,146 @@
   }
 
   // ---------- Search ----------
+  // Search by: Anything · Title · Actor · Director · Studio · Year · Country, and All / Movies / Shows.
+  // Actors, directors and studios: their whole filmography (Wikidata), what's on your apps, then everything ShowBox has.
+  // Year / country / genre: ShowBox's own filtered lists too. Autocomplete for titles, people, studios, years and countries.
+  var SMODES = [["all", "Anything"], ["title", "Title"], ["actor", "Actor"], ["director", "Director"], ["studio", "Studio"], ["year", "Year"], ["country", "Country"]];
+  var SHOLD = { all: "Shows, films, actors, studios, years", title: "A film or show name", actor: "An actor — e.g. Tom Cruise", director: "A director — e.g. Christopher Nolan",
+    studio: "A studio or network — e.g. A24, Pixar, HBO", year: "A year or decade — e.g. 2016, 90s", country: "A country — e.g. Korean, Japanese, Spanish" };
+  var STUDIOS = ["Marvel Studios", "A24", "Pixar", "Studio Ghibli", "HBO", "Netflix", "Blumhouse Productions", "Walt Disney Pictures", "Warner Bros.", "DreamWorks Animation", "Lucasfilm", "Legendary Pictures", "Toho", "CJ ENM", "Studio Dragon", "Yash Raj Films"];
+  var CWORDS = ["Korean", "Japanese", "Indian", "British", "American", "Spanish", "French", "Chinese", "Thai", "Turkish", "German", "Italian", "Mexican", "Taiwanese", "Australian", "Danish", "Swedish", "Norwegian", "Brazilian", "Filipino"];
+  var CATIX = null;
+  function catIx() { if (CATIX) return CATIX; var im = {}, nm = {};
+    S.ALL.forEach(function (t) { if (t.imdb_id) im[t.imdb_id] = t; var k = S.norm(t.title); (nm[k] = nm[k] || []).push(t); }); return (CATIX = { im: im, nm: nm }); }
+  function catOf(w) { var X = catIx(); if (w.imdb && X.im[w.imdb] && X.im[w.imdb].type === w.type) return X.im[w.imdb];
+    return (X.nm[S.norm(w.t)] || []).filter(function (t) { return t.type === w.type && (!w.y || !t.year || Math.abs(t.year - w.y) <= 1); })[0] || null; }
+  var DIRS = null;
+  function topDirectors() { if (DIRS) return DIRS; var m = {};
+    S.ALL.forEach(function (t) { (t.dirs || []).forEach(function (n) { m[n] = (m[n] || 0) + 1 + Math.log(1 + (t.votes || 0)) / 3; }); });
+    return (DIRS = Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }).slice(0, 16)); }
+  function yearsGrid(items) { var g = gridOf(items); [].forEach.call(g.children, function (c, k) { var t = items[k]; if (t && t.year) c.insertAdjacentHTML("beforeend", '<span class="yr">' + t.year + "</span>"); }); return g; }
+  function hiQ(s, q) { var a = String(s), i = a.toLowerCase().indexOf(q.toLowerCase()); return i < 0 || !q ? esc(a) : esc(a.slice(0, i)) + "<b>" + esc(a.slice(i, i + q.length)) + "</b>" + esc(a.slice(i + q.length)); }
+  function initials(n) { return esc(n.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0); }).join("").toUpperCase()); }
+
   function renderSearch(page) {
-    var box = h("div", "sbox", G.search + '<input type="search" placeholder="Shows, films, actors, genres" enterkeyhint="search" autocomplete="off" autocorrect="off"><button class="clr">' + G.xc + "</button>");
+    var MODE = S.pref("smode", "all"), KIND = S.pref("skind", ""), SORT = S.pref("ssort", "pop");
+    if (!SHOLD[MODE]) MODE = "all";
+    var box = h("div", "sbox", G.search + '<input type="search" placeholder="' + esc(SHOLD[MODE]) + '" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="clr">' + G.xc + "</button>");
     page.appendChild(box);
+    var ac = h("div", "ac"); box.appendChild(ac);
+    var row1 = h("div", "srow1"), seg = h("div", "seg"), filt = h("div", "sfilt");
+    function drawFilt() {
+      seg.innerHTML = [["", "All"], ["MOVIE", "Movies"], ["SHOW", "Shows"]].map(function (k) { return '<button data-sk="' + k[0] + '"' + (KIND === k[0] ? ' class="on"' : "") + ">" + k[1] + "</button>"; }).join("");
+      filt.innerHTML = '<span class="sby">Search by</span>' + SMODES.map(function (m) { return '<button class="smode' + (MODE === m[0] ? " on" : "") + '" data-sm="' + m[0] + '">' + m[1] + "</button>"; }).join("");
+    }
+    drawFilt(); row1.appendChild(seg); page.appendChild(row1); page.appendChild(filt);
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
-    if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); page.appendChild(sbt); }
+    if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); row1.appendChild(sbt); }
     chips.style.margin = "0 0 14px"; page.appendChild(chips); page.appendChild(body);
     inp.value = arg || "";
-    var t = null, rawOnly = false;
+    var t = null, rawOnly = false, stok = 0, PICK = null, whoT = null;
+    function kindWord() { return KIND === "MOVIE" ? " movies" : KIND === "SHOW" ? " series" : ""; }
+    function chipsHTML(list) { return list.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join(""); }
+    function onlyType(R, ty) {
+      if (!ty) return R; var ok = function (x) { return x && x.type === ty; };
+      if (R.sections) { R.sections = R.sections.map(function (s) { return Object.assign({}, s, { items: s.items.filter(ok) }); }).filter(function (s) { return s.items.length; }); return R; }
+      if (R.top && !ok(R.top)) R.top = null;
+      R.titles = R.titles.filter(ok); R.similar = R.similar.filter(ok); R.vibe = R.vibe.filter(ok);
+      if (!R.top && R.titles.length && S.norm(R.titles[0].title).indexOf(S.norm(R.label || "")) === 0) R.top = R.titles.shift();
+      return R;
+    }
+    // a progressive ShowBox row/grid that fills in as answers arrive
+    function live(anchor, title, asGrid) {
+      var el = h("div", "sbres"); el.innerHTML = '<div class="row-h">' + esc(title) + '<small>looking…</small></div><div class="sbph"></div>';
+      if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(el, anchor.nextSibling); else body.appendChild(el);
+      var cur = el;
+      return { el: function () { return cur; }, set: function (items, done, sub) {
+        if (!cur.isConnected) return;
+        if (!items.length) { if (done) { var sm = cur.querySelector("small"); if (sm) sm.textContent = sub || "nothing found"; var ph = cur.querySelector(".sbph"); if (ph) ph.remove(); } return; }
+        var nx;
+        if (asGrid) { nx = h("div", "sbres"); nx.innerHTML = '<div class="sec-h">' + esc(title) + ' <small class="secsub">' + esc(sub || items.length + (done ? "" : " so far · looking…")) + "</small></div>"; nx.appendChild(yearsGrid(items)); }
+        else { var keep = cur.querySelector && cur.querySelector(".rail"), x = keep ? keep.scrollLeft : 0;
+          nx = rowEl(S.R(title, items.slice(0, 40), null, (sub || items.length + (done ? "" : " so far…")) + " · tap Play with FebBox", 1, true)); nx.classList.add("sbres");
+          cur.replaceWith(nx); nx._fill(); var nr = nx.querySelector(".rail"); if (nr && x) nr.scrollLeft = x; cur = nx; return; }
+        cur.replaceWith(nx); cur = nx; } };
+    }
+
+    // ---- a person or a studio: everything they made ----
+    function who(hit, role, ty, full, my, anchor) {
+      var wrap = h("div", "who"), noun = ty === "MOVIE" ? "films" : ty === "SHOW" ? "series" : "films & series", pre = hit.kind === "studio" ? "From " : role === "director" ? "By " : "With ";
+      wrap.innerHTML = '<div class="whoh"><div class="wav' + (hit.kind === "studio" ? " st" : "") + '">' + initials(hit.name) + "</div><div class=\"whot\"><b>" + esc(hit.name) + "</b><small>" + esc(hit.desc || "") + "</small></div>" +
+        (full ? "" : '<button class="seeall" data-whoall="' + (hit.kind === "studio" ? "studio" : role || "actor") + '" data-whon="' + esc(hit.name) + '">All ' + noun + G.r + "</button>") + '</div><div class="whob"><div class="sbph"></div></div>';
+      if (anchor) body.insertBefore(wrap, anchor); else body.appendChild(wrap);
+      var whob = wrap.querySelector(".whob");
+      window.VSEEK.works(hit.id, hit.kind, function (list) {
+        if (my !== stok) return; whob.textContent = "";
+        list = list || [];
+        if (role === "director") { var dl = list.filter(function (w) { return w.d; }); if (dl.length) list = dl; }
+        else if (role === "actor") { var al = list.filter(function (w) { return !w.d; }); if (al.length) list = al; }
+        if (ty) list = list.filter(function (w) { return w.type === ty; });
+        var hid = S.hiddenSet(), pairs = list.map(function (w) { return { w: w, t: catOf(w) }; });
+        function score(p) { return p.w.f * 2 + (p.t ? Math.log(1 + (p.t.votes || 0)) * 2 : 0); }
+        function sortP(a) { return a.slice().sort(SORT === "new" ? function (x, y) { return (y.w.y || 0) - (x.w.y || 0); } : SORT === "old" ? function (x, y) { return (x.w.y || 9999) - (y.w.y || 9999); } : function (x, y) { return score(y) - score(x); }); }
+        pairs = sortP(pairs);
+        var onApps = pairs.filter(function (p) { return p.t && (p.t.avail || []).length && !hid[p.t.id]; }), appIds = {};
+        onApps.forEach(function (p) { appIds[p.t.id] = 1; });
+        if (!list.length) { whob.appendChild(h("div", "empty sm", "<b>Couldn't load " + esc(hit.name) + "'s " + noun + "</b>Check your connection and try again.")); return; }
+        var head = h("div", "whon", "<b>" + list.length + "</b> " + noun + " · <b>" + onApps.length + "</b> on your apps" + (window.VSB && VSB.on() ? ' · <span class="sbn">checking ShowBox…</span>' : ""));
+        whob.appendChild(head);
+        var sortsEl = null; if (full) whob.appendChild(sortsEl = h("div", "chips sorts", [["pop", "Most popular"], ["new", "Newest"], ["old", "Oldest"]].map(function (s) { return '<button class="chip' + (SORT === s[0] ? " on" : "") + '" data-ss="' + s[0] + '">' + s[1] + "</button>"; }).join("")));
+        var appsEl = null;
+        if (onApps.length) {
+          if (full) { whob.appendChild(h("div", "sec-h", "On your apps <small class=\"secsub\">" + onApps.length + "</small>")); appsEl = yearsGrid(onApps.map(function (p) { return p.t; })); whob.appendChild(appsEl); }
+          else { appsEl = rowEl(S.R(pre + hit.name + " on your apps", onApps.map(function (p) { return p.t; }), null, onApps.length + "", 1, true)); whob.appendChild(appsEl); appsEl._fill(); }
+        }
+        var rest = h("div"); whob.appendChild(rest);
+        function missing(foundIds) {
+          if (!full) return; rest.textContent = "";
+          var miss = pairs.filter(function (p) { return !(p.t && appIds[p.t.id]) && !foundIds[p.w.t + "|" + p.w.y]; });
+          if (!miss.length) return;
+          var n = h("div", "nsl"); n.innerHTML = '<div class="sec-h">Not found on your apps' + (window.VSB && VSB.on() ? " or ShowBox" : "") + ' <small class="secsub">' + miss.length + "</small></div><p>" +
+            miss.slice(0, 24).map(function (p) { return esc(p.w.t) + (p.w.y ? " <i>" + p.w.y + "</i>" : ""); }).join(" · ") + (miss.length > 24 ? ' <button data-nsall>+ ' + (miss.length - 24) + " more</button>" : "") + "</p>";
+          n._all = miss; rest.appendChild(n);
+        }
+        if (!(window.VSB && VSB.on())) { missing({}); if (full) rest.insertAdjacentHTML("afterbegin", '<div class="sbhint">Turn on <b>ShowBox</b> above to also find the ' + Math.max(0, list.length - onApps.length) + " that aren't on your apps.</div>"); return; }
+        var L = live(appsEl || sortsEl || head, pre + hit.name + " on ShowBox", full), last = [];
+        VSB.works(sortP(pairs).map(function (p) { return p.w; }), hit.name, ty, function (found, done) {
+          if (my !== stok) return;
+          var fids = {}; found.forEach(function (x) { fids[x.w.t + "|" + x.w.y] = 1; });
+          var items = found.filter(function (x) { return !appIds[x.t.id] && !hid[x.t.id]; }).map(function (x) { if (!x.t.year && x.w.y) x.t.year = x.w.y; return x.t; });
+          var sn = head.querySelector(".sbn"); if (sn) sn.innerHTML = "<b>" + found.length + "</b> on ShowBox" + (done ? "" : " · looking…");
+          if (items.length !== last.length || done) { last = items; L.set(items, done, done ? (items.length ? items.length + " more to watch" : "nothing else on ShowBox") : null); }
+          if (done) missing(fids);
+        });
+      });
+    }
+    // which person / studio does this name mean? (a pick from the suggestions wins)
+    function resolve(name, want, cb) {
+      if (PICK && S.norm(PICK.name) === S.norm(name) && (!want || want === PICK.kind)) return cb(PICK);
+      window.VSEEK.find(name, function (hits) {
+        var nn = S.norm(name), cat = want !== "studio" ? findPerson(name) : null, target = cat ? S.norm(cat.n) : nn;
+        var ok = hits.filter(function (x) { return (!want || x.kind === want); });
+        var exact = ok.filter(function (x) { var k = S.norm(x.name); return k === nn || k === target; })[0];
+        cb(exact || (want ? ok[0] : null) || null);
+      });
+    }
+
     function run() {
       var q = inp.value.trim(); arg = q; box.classList.toggle("has", !!q); body.textContent = ""; chips.textContent = "";
+      var my = ++stok; clearTimeout(whoT); if (window.VSB && VSB.cancel) VSB.cancel();
       if (!q) {
+        if (MODE === "actor") { body.appendChild(h("div", "sec-h", "Popular actors")); body.appendChild(h("div", "chips pad", chipsHTML((S.CAT.people || []).slice().sort(function (a, b) { return b[2] - a[2]; }).slice(0, 18).map(function (p) { return p[0]; })))); return; }
+        if (MODE === "director") { body.appendChild(h("div", "sec-h", "Directors")); body.appendChild(h("div", "chips pad", chipsHTML(topDirectors()))); return; }
+        if (MODE === "studio") { body.appendChild(h("div", "sec-h", "Studios & networks")); body.appendChild(h("div", "chips pad", chipsHTML(STUDIOS))); return; }
+        if (MODE === "year") { var yy = [], y0 = new Date().getFullYear(); for (var y = y0; y > y0 - 12; y--) yy.push(String(y)); body.appendChild(h("div", "sec-h", "Pick a year")); body.appendChild(h("div", "chips pad", chipsHTML(yy.concat(["2010s", "2000s", "90s", "80s", "70s"])))); return; }
+        if (MODE === "country") { body.appendChild(h("div", "sec-h", "Pick a country")); body.appendChild(h("div", "chips pad", chipsHTML(CWORDS))); return; }
         var rec = S.list("queries").slice(0, 8);
-        chips.innerHTML = rec.map(function (r) { return '<button class="chip" data-q="' + esc(r) + '">' + esc(r) + "</button>"; }).join("");
+        chips.innerHTML = chipsHTML(rec);
         var seenIds = S.list("viewed").slice(0, 16), seen = S.ids(seenIds).filter(function (x) { return (x.avail || []).length; });
         if (seen.length >= 2) { var rv = rowEl(S.R("Recently Viewed", seen, null, null, 1, true)); body.appendChild(rv); rv._fill(); }
         var quick = h("div", "quick");
         quick.innerHTML = "<h4>Try a vibe</h4>" + ["new york", "college", "heist", "road trip", "small town", "detective", "wedding", "time travel"].map(function (v) { return '<button class="chip" data-q="' + v + '">' + v + "</button>"; }).join("") +
+          "<h4>Try searching by</h4>" + ["tom cruise", "a24", "korean movies", "2016", "christopher nolan", "japanese series 2020s"].map(function (v) { return '<button class="chip" data-q="' + v + '">' + v + "</button>"; }).join("") +
           "<h4>Throwback</h4>" + ERAS.map(function (e) { return '<button class="chip era" data-era="' + e.k + '">' + e.label + " American films</button>"; }).join("");
         body.appendChild(quick);
         body.appendChild(h("div", "sec-h", "Top Searches"));
@@ -593,24 +716,59 @@
           body.appendChild(li); });
         return;
       }
-      var fixedQ = autocorrect(q);
-      if (!rawOnly && fixedQ !== q && S.norm(fixedQ) !== S.norm(q)) body.appendChild(h("div", "fixq", "Showing results for <b>" + esc(fixedQ) + '</b><button data-raw="' + esc(q) + '">Search “' + esc(q) + "” instead</button>"));
-      var R = smartSearch(rawOnly ? q : fixedQ); rawOnly = false;
-      if (window.VSB && VSB.on()) VSB.searchInto(body, rawOnly ? q : fixedQ, R, rowEl);
+      // actor / director / studio: their whole filmography
+      if (MODE === "actor" || MODE === "director" || MODE === "studio") {
+        var holder = h("div", "who wait", '<div class="whoh"><div class="wav">' + initials(q) + '</div><div class="whot"><b>' + esc(q) + "</b><small>finding…</small></div></div>"); body.appendChild(holder);
+        whoT = setTimeout(function () { resolve(q, MODE === "studio" ? "studio" : "person", function (hit) { if (my !== stok) return; holder.remove();
+          if (hit) return who(hit, MODE === "studio" ? null : MODE, KIND || null, true, my);
+          var cp = MODE !== "studio" && findPerson(q);   // offline or not on Wikidata: what Vesper itself knows
+          if (cp) { var Rp = structuredSearch(cp.n + kindWord(), parseQuery(cp.n + kindWord())); Rp.sections.forEach(function (sx) { body.appendChild(h("div", "sec-h", esc(sx.title))); body.appendChild(gridOf(sx.items)); }); return; }
+          body.appendChild(h("div", "empty", "<b>No " + (MODE === "studio" ? "studio" : MODE) + " called “" + esc(q) + "”</b>Pick one from the suggestions as you type, or try Anything."));
+        }); }, PICK ? 0 : 200);
+        return;
+      }
+      // year / country: shape the words, then the usual smart search (+ ShowBox's own lists)
+      var q2 = q;
+      if (MODE === "year") { var yq = S.norm(q); if (!/\b((19|20)\d{2}|\d{2,4}s)\b/.test(yq)) { var dm = yq.match(/^(\d{2,4})$/); if (dm) q2 = dm[1].length === 2 ? dm[1] + "s" : dm[1]; } }
+      if (MODE === "country") { var cw = S.norm(q).split(" "), hasC = cw.some(function (w) { return COUNTRY[w]; });
+        if (!hasC) { var guess = Object.keys(COUNTRY).filter(function (k) { return k.indexOf(cw[0]) === 0; })[0] || CWORDS.filter(function (c) { return c.toLowerCase().indexOf(cw[0]) === 0; })[0]; if (guess) q2 = guess.toLowerCase() + " " + cw.slice(1).join(" "); } }
+      var P0 = parseQuery(q2), ty = KIND || P0.type || null;
+      if (KIND && P0.structured && !P0.type) q2 = q2 + kindWord();
+      if ((MODE === "year" || MODE === "country") && !parseQuery(q2).structured) { body.appendChild(h("div", "empty", "<b>“" + esc(q) + "” isn't a " + MODE + " Vesper knows</b>" + (MODE === "year" ? "Try 2016, 2010s or 90s." : "Try Korean, Japan or Spanish."))); return; }
+      var fixedQ = MODE === "title" ? q2 : autocorrect(q2);
+      if (!rawOnly && fixedQ !== q2 && S.norm(fixedQ) !== S.norm(q2)) body.appendChild(h("div", "fixq", "Showing results for <b>" + esc(fixedQ) + '</b><button data-raw="' + esc(q) + '">Search “' + esc(q) + "” instead</button>"));
+      var useQ = rawOnly ? q2 : fixedQ; rawOnly = false;
+      var R;
+      if (MODE === "title") { var bn = S.search(useQ, 60), nq = S.norm(useQ); R = { top: null, titles: bn.titles, similar: [], vibe: [], chips: [], label: useQ };
+        var ti = bn.titles.filter(function (x) { var k = S.norm(x.title); return k === nq || k.indexOf(nq) === 0; })[0]; if (ti) { R.top = ti; R.titles = bn.titles.filter(function (x) { return x !== ti; }); R.similar = S.similar(ti, 20).filter(function (x) { return (x.avail || []).length; }); } }
+      else R = smartSearch(useQ);
+      R = onlyType(R, ty);
+      var P = parseQuery(useQ); P.type = ty;
+      if (window.VSB && VSB.on()) {
+        VSB.searchInto(body, useQ, R, rowEl, { type: ty });
+        if (P.structured && !P.who) { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
+          if (!VSB.browse(P, function (items, done) { if (my === stok) lb.set(items, done); })) lb.el().remove(); }
+      }
+      // "Anything" mode: a name that's a person or a studio gets their filmography on top
+      if (MODE === "all" && !(R.top && S.norm(R.top.title) === S.norm(P0.rest.join(" "))) && P0.rest.length && !(P.structured && !P0.rest.length)) {
+        var nm = P0.rest.join(" ");
+        if (nm.length >= 3) whoT = setTimeout(function () { resolve(nm, null, function (hit) { if (my !== stok || !hit) return;
+          if (S.norm(hit.name) !== S.norm(nm) && !(PICK && PICK.id === hit.id)) { var cp2 = findPerson(nm); if (!cp2 || S.norm(cp2.n) !== S.norm(hit.name)) return; }
+          if (window.VSB) VSB.cancel(); [].forEach.call(body.querySelectorAll(".sbres"), function (x) { x.remove(); });
+          who(hit, null, ty, false, my, body.firstChild); }); }, PICK ? 0 : 300);
+      }
       if (R.sections) {
-        chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
-        if (!R.sections.length) { body.appendChild(h("div", "empty", "<b>Nothing like that on your apps</b>Try a nearby year, or drop a word.")); return; }
+        chips.innerHTML = chipsHTML(R.chips);
+        if (!R.sections.length) { body.appendChild(h("div", "empty", "<b>Nothing like that on your apps</b>" + (window.VSB && VSB.on() ? "ShowBox's own list is above, if it has any." : "Try a nearby year, or drop a word."))); return; }
         if (R.like) { var lc = h("div", "likeof"); lc.dataset.id = R.like.id; lc.innerHTML = '<img src="' + S.po(R.like, "s332") + '"><span><small>Because you liked</small>' + esc(R.like.title) + "</span>" + G.r; body.appendChild(lc); }
         R.sections.forEach(function (sx) {
           body.appendChild(h("div", "sec-h", esc(sx.title) + (sx.sub ? ' <small class="secsub">' + esc(sx.sub) + "</small>" : "")));
-          var g = gridOf(sx.items);
-          if (sx.years) [].forEach.call(g.children, function (c, k) { var t = sx.items[k]; if (t && t.year) c.insertAdjacentHTML("beforeend", '<span class="yr">' + t.year + "</span>"); });
-          body.appendChild(g);
+          body.appendChild(sx.years ? yearsGrid(sx.items) : gridOf(sx.items));
         });
         return;
       }
-      chips.innerHTML = R.chips.map(function (c) { return '<button class="chip" data-q="' + esc(c) + '">' + esc(c) + "</button>"; }).join("");
-      if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", "<b>No matches</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
+      chips.innerHTML = chipsHTML(R.chips);
+      if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", "<b>No matches" + (ty ? " in " + (ty === "MOVIE" ? "movies" : "shows") : "") + "</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
       if (R.top) {
         var tp = h("div", "toprez"); tp.dataset.id = R.top.id; var ta = S.pickApp(R.top);
         tp.innerHTML = '<div class="art"><img src="' + S.bd(R.top, "s1440") + '"><div class="g"></div>' + (ta ? '<img class="lg" src="' + LOGO[ta] + '">' : "") + '</div><div class="tx"><small>Top result</small><b>' + esc(R.top.title) +
@@ -622,14 +780,117 @@
       if (R.similar.length) { var row = rowEl(S.R("More like " + R.top.title, R.similar)); body.appendChild(row); row._fill(); }
       if (R.vibe.length) { body.appendChild(h("div", "sec-h", "The “" + esc(R.label) + "” vibe")); body.appendChild(gridOf(R.vibe)); }
     }
+
+    // ---------- autocomplete ----------
+    var acList = [], acSel = -1, acTok = 0;
+    function acHide() { ac.classList.remove("on"); acSel = -1; }
+    function acDraw(q) {
+      if (!acList.length || document.activeElement !== inp) return acHide();
+      ac.innerHTML = acList.map(function (x, i) {
+        var art = x.t ? '<span class="aimg"><img src="' + (x.t.sb ? x.t.poster : S.po(x.t, "s166")) + '" loading="lazy" onerror="this.remove()"></span>'
+          : '<span class="aic ' + x.k + '">' + (x.k === "person" || x.k === "studio" ? initials(x.label) : x.k === "recent" ? G.search : x.k === "year" ? "#" : "↗") + "</span>";
+        return '<button class="aci' + (i === acSel ? " sel" : "") + '" data-aci="' + i + '">' + art + '<span class="atx">' + hiQ(x.label, q) + "<small>" + esc(x.sub || "") + "</small></span></button>";
+      }).join("");
+      ac.classList.add("on");
+    }
+    function ty2(t) { return t.type === "SHOW" ? "Series" : "Film"; }
+    function acBuild() {
+      var q = inp.value.trim(), nq = S.norm(q), my = ++acTok; acList = []; acSel = -1;
+      if (!nq) return acHide();
+      var seen = {}, add = function (x) { var k = x.k + "|" + S.norm(x.label) + "|" + (x.t ? x.t.id : ""); if (seen[k]) return; seen[k] = 1; acList.push(x); };
+      var kOk = function (t) { return !KIND || t.type === KIND; };
+      S.list("queries").filter(function (r) { var k = S.norm(r); return k !== nq && k.indexOf(nq) === 0; }).slice(0, 2).forEach(function (r) { add({ k: "recent", label: r, sub: "Recent search", q: r }); });
+      if (MODE === "all" || MODE === "title") {
+        var tl = acTitles(nq).filter(kOk);
+        if (tl.length < 3 && nq.length >= 4) { var fx = autocorrect(q); if (fx !== q) tl = tl.concat(acTitles(S.norm(fx)).filter(kOk)); }
+        tl.slice(0, MODE === "title" ? 7 : 4).forEach(function (t) { add({ k: "title", label: t.title, sub: [ty2(t), t.year, LABEL[S.pickApp(t)]].filter(Boolean).join(" · "), t: t }); });
+        if (window.VSB && VSB.on()) VSB.cached().filter(function (c) { var k = S.norm(c.title); return k.indexOf(nq) === 0 || (nq.length >= 3 && (" " + k).indexOf(" " + nq) >= 0); }).slice(0, 12)
+          .map(function (c) { return VSB.T(c); }).filter(function (t) { return kOk(t) && !acList.some(function (x) { return x.t === t; }); }).slice(0, 3)
+          .forEach(function (t) { add({ k: "title", label: t.title, sub: [ty2(t), t.year, "ShowBox"].filter(Boolean).join(" · "), t: t }); });
+      }
+      if (MODE === "all" || MODE === "actor" || MODE === "director") {
+        var ppl = S.search(q, 1).people.slice(0, MODE === "all" ? 2 : 5);
+        if (MODE === "director") ppl = topDirectors().filter(function (n) { return (" " + S.norm(n)).indexOf(" " + nq) >= 0; }).concat(ppl).slice(0, 5);
+        ppl.forEach(function (n) { add({ k: "person", label: n, sub: MODE === "director" ? "Director" : "Person", q: n }); });
+      }
+      if (MODE === "all" || MODE === "country") {
+        CWORDS.filter(function (c) { return c.toLowerCase().indexOf(nq.split(" ")[0]) === 0 && nq.length >= 2; }).slice(0, 2).forEach(function (c) {
+          var rest = nq.split(" ").slice(1).join(" "), base = c + (rest ? " " + rest : "");
+          (KIND === "SHOW" ? [base + " series"] : KIND === "MOVIE" ? [base + " movies"] : [base + " movies", base + " series"]).forEach(function (v) { add({ k: "q", label: v, sub: "Country", q: v }); }); });
+      }
+      if (MODE === "year" || (MODE === "all" && /^\d{1,4}$/.test(nq))) {
+        var y0 = new Date().getFullYear(), ys = [];
+        for (var y = y0 + 1; y >= 1950; y--) if (String(y).indexOf(nq) === 0) ys.push(String(y));
+        ["2020s", "2010s", "2000s", "90s", "80s", "70s"].forEach(function (d) { if (d.indexOf(nq) === 0 || d.replace(/^(19|20)/, "").indexOf(nq) === 0) ys.push(d); });
+        ys.slice(0, 6).forEach(function (v) { add({ k: "year", label: v + kindWord(), sub: "Year", q: v + kindWord() }); });
+      }
+      if (MODE === "studio") STUDIOS.filter(function (s) { return S.norm(s).indexOf(nq) >= 0; }).slice(0, 4).forEach(function (s) { add({ k: "studio", label: s, sub: "Studio", q: s }); });
+      acList.forEach(function (x, i) { x.o = i; }); acList.sort(function (a, b) { return acRank(a, nq) - acRank(b, nq); });
+      acDraw(q);
+      // people & studios from Wikidata (anyone, not only who's in Vesper)
+      if ((MODE === "all" || MODE === "actor" || MODE === "director" || MODE === "studio") && nq.length >= 2) {
+        clearTimeout(acBuild._t); acBuild._t = setTimeout(function () {
+          window.VSEEK.find(q, function (hits) { if (my !== acTok) return;
+            var want = MODE === "studio" ? "studio" : MODE === "all" ? null : "person";
+            var extra = hits.filter(function (x) { return !want || x.kind === want; }).slice(0, MODE === "all" ? 3 : 6);
+            // the Wikidata answer carries the description, so it replaces a plain name already listed
+            extra.forEach(function (x) { var lab = S.norm(x.name);
+              acList = acList.filter(function (y) { var drop = (y.k === "person" || y.k === "studio") && S.norm(y.label) === lab && !y.w; if (drop) delete seen[y.k + "|" + lab + "|"]; return !drop; });
+              if (x.kind === "studio") delete seen["person|" + lab + "|"];
+              add({ k: x.kind, label: x.name, sub: x.desc, q: x.name, w: x }); });
+            acList.forEach(function (x, i) { x.o = i; }); acList.sort(function (a, b) { return acRank(a, nq) - acRank(b, nq); });
+            acList = acList.slice(0, 10); acDraw(q); });
+        }, 220);
+      }
+    }
+    // titles as you type: every finished word is a whole word of the title, the last one may be half-typed
+    function acTitles(nq) {
+      var qw = nq.split(" ").filter(Boolean), last = qw.pop(), out = [];
+      S.ALL.forEach(function (t) { var tk = t._k || (t._k = S.norm(t.title)), tw = tk.split(" ");
+        if (!qw.every(function (w) { return tw.indexOf(w) >= 0; }) || !tw.some(function (w) { return w.indexOf(last) === 0; })) return;
+        var sc = tk === nq ? 900 : tk.indexOf(nq) === 0 ? 700 : (" " + tk).indexOf(" " + nq) >= 0 ? 500 : 300;
+        out.push({ t: t, s: sc + Math.min(70, Math.log(1 + (t.votes || 0)) * 5) + (t.imdb || 0) * 2 + ((t.avail || []).length ? 40 : 0) }); });
+      return out.sort(function (a, b) { return b.s - a.s; }).slice(0, 10).map(function (o) { return o.t; });
+    }
+    // order: recent searches, then whatever starts with what you typed (titles and people alike), then the rest
+    function acRank(x, nq) {
+      if (x.k === "recent") return 0;
+      var k = S.norm(x.label), pre = k.indexOf(nq) === 0, word = (" " + k).indexOf(" " + nq) >= 0;
+      var base = k === nq ? 1 : pre ? 2 : word ? 3 : 4;
+      return base + (x.k === "person" || x.k === "studio" ? (x.w ? 0.1 : 0.2) : x.t && x.t.sb ? 0.5 : 0.3) + (x.o || 0) / 1000;
+    }
+    function acPick(x) {
+      acHide(); if (!x) return;
+      if (x.t) { inp.value = x.t.title; saveQ(); inp.blur(); run(); openDetail(x.t.id); return; }
+      if (x.w) PICK = x.w;
+      if (x.k === "person" && MODE !== "actor" && MODE !== "director") setMode(/director|filmmaker/i.test(x.sub || "") && !/actor|actress/i.test(x.sub || "") ? "director" : "actor");
+      if (x.k === "studio" && MODE !== "studio") setMode("studio");
+      inp.value = x.q || x.label; saveQ(); inp.blur(); run();
+    }
+    function setMode(m) { MODE = m; setPref("smode", m); inp.placeholder = SHOLD[m]; drawFilt(); }
+
     function saveQ() { var q = inp.value.trim(); if (q.length < 2) return; var l = S.list("queries").filter(function (x) { return x.toLowerCase() !== q.toLowerCase(); }); l.unshift(q); S.set("queries", l.slice(0, 12)); }
-    inp.addEventListener("input", function () { clearTimeout(t); t = setTimeout(run, 120); });
-    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { saveQ(); inp.blur(); } });
+    inp.addEventListener("input", function () { clearTimeout(t); if (PICK && S.norm(PICK.name) !== S.norm(inp.value)) PICK = null; acBuild(); t = setTimeout(run, 160); });
+    inp.addEventListener("focus", function () { if (inp.value.trim()) acBuild(); });
+    inp.addEventListener("blur", function () { setTimeout(acHide, 180); });
+    inp.addEventListener("keydown", function (e) {
+      var on = ac.classList.contains("on");
+      if (on && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); acSel += e.key === "ArrowDown" ? 1 : -1; if (acSel >= acList.length) acSel = -1; else if (acSel < -1) acSel = acList.length - 1; acDraw(inp.value.trim()); return; }
+      if (e.key === "Escape") { acHide(); return; }
+      if (e.key === "Enter") { if (on && acSel >= 0) { e.preventDefault(); return acPick(acList[acSel]); } acHide(); saveQ(); inp.blur(); }
+    });
+    ac.addEventListener("mousedown", function (e) { e.preventDefault(); });   // keep the keyboard / focus while choosing
+    ac.addEventListener("click", function (e) { var b = e.target.closest("[data-aci]"); if (b) { e.stopPropagation(); acPick(acList[+b.dataset.aci]); } });
     body.addEventListener("click", saveQ, true);
-    box.querySelector(".clr").addEventListener("click", function () { inp.value = ""; run(); inp.focus(); });
+    box.querySelector(".clr").addEventListener("click", function () { inp.value = ""; PICK = null; acHide(); run(); inp.focus(); });
     page.addEventListener("click", function (e) {
+      var sk = e.target.closest("[data-sk]"); if (sk) { KIND = sk.dataset.sk; setPref("skind", KIND); drawFilt(); run(); return; }
+      var sm = e.target.closest("[data-sm]"); if (sm) { setMode(sm.dataset.sm); run(); if (!inp.value) inp.focus(); return; }
+      var ss = e.target.closest("[data-ss]"); if (ss) { SORT = ss.dataset.ss; setPref("ssort", SORT); run(); return; }
+      var wa = e.target.closest("[data-whoall]"); if (wa) { setMode(wa.dataset.whoall); inp.value = wa.dataset.whon; run(); $("view").scrollTo({ top: 0 }); return; }
+      var na = e.target.closest("[data-nsall]"); if (na) { var box2 = na.closest(".nsl"); box2.querySelector("p").innerHTML = box2._all.map(function (p) { return esc(p.w.t) + (p.w.y ? " <i>" + p.w.y + "</i>" : ""); }).join(" · "); return; }
       var r0 = e.target.closest("[data-raw]"); if (r0) { rawOnly = true; run(); return; }
-      var b = e.target.closest("[data-q]"); if (b) { inp.value = b.dataset.q; run(); saveQ(); } });
+      var b = e.target.closest("[data-q]"); if (b) { inp.value = b.dataset.q; acHide(); run(); saveQ(); } });
     run();
     if (!inp.value) setTimeout(function () { inp.focus(); }, 300);
   }

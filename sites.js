@@ -102,8 +102,8 @@
       SR.search(SITE, key, function (e2, l2) { var seen = {}, out = [];
         list.concat((l2 || []).filter(function (c) { return close(c.title, qn); }).sort(function (a, b) { return close(b.title, qn) - close(a.title, qn); }))
           .forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); cb(out); }); }); }
-  function searchInto(body, q, R, rowEl) {
-    if (!ON || !q) return; var my = ++tok, qn = norm(q);
+  function searchInto(body, q, R, rowEl, opt) {
+    if (!ON || !q) return; var my = ++tok, qn = norm(q), TY = (opt && opt.type) || null, okT = function (t) { return !TY || (t && t.type === TY); };
     var box = document.createElement("div"); box.className = "sbres"; box.innerHTML = '<div class="row-h">On ShowBox<small>looking…</small></div><div class="sbph"></div>';
     body.insertBefore(box, body.firstChild);
     var mine = [];   // Vesper's own matches, best first
@@ -111,13 +111,13 @@
     if (R.top) mine.push(R.top); (R.titles || []).forEach(function (t) { mine.push(t); });
     var loose = !mine.length;
     if (loose) { (R.sections || []).forEach(function (s) { (s.items || []).forEach(function (t) { mine.push(t); }); }); (R.vibe || []).forEach(function (t) { mine.push(t); }); }
-    mine = mine.filter(function (t, i) { return t && mine.indexOf(t) === i; }).slice(0, 12);
+    mine = mine.filter(function (t, i) { return t && mine.indexOf(t) === i && okT(t); }).slice(0, 12);
     var cur = box, ok = [];
     function paint() { if (my !== tok) return;
       var own = (SSR[qn] || []).map(T), byName = {}; own.forEach(function (t) { byName[norm(t.title)] = 1; });
       mine.forEach(function (t) { if (ok.indexOf(t) < 0 && (t.site || byName[norm(t.title)])) ok.push(t); });
       var exact = own.filter(function (t) { return norm(t.title) === qn || close(t.title, qn) >= 3; }), seen = {}, items = [];
-      exact.concat(loose && exact.length ? [] : mine.filter(function (t) { return ok.indexOf(t) >= 0; })).concat(loose && exact.length ? own.filter(function (t) { return close(t.title, qn); }) : own).forEach(function (t) { if (t && !seen[t.id]) { seen[t.id] = 1; items.push(t); } });
+      exact.concat(loose && exact.length ? [] : mine.filter(function (t) { return ok.indexOf(t) >= 0; })).concat(loose && exact.length ? own.filter(function (t) { return close(t.title, qn); }) : own).forEach(function (t) { if (t && !seen[t.id] && okT(t)) { seen[t.id] = 1; items.push(t); } });
       if (!items.length) { if (SSR[qn]) { var sm = cur.querySelector && cur.querySelector("small"); if (sm) sm.textContent = "nothing for “" + q + "”"; var ph = cur.querySelector && cur.querySelector(".sbph"); if (ph) ph.remove(); } return; }
       var row = rowEl(S.R("On ShowBox", items.slice(0, 30), null, items.length + " · tap Play with FebBox", 1, true)), keep = cur.querySelector && cur.querySelector(".rail"), x = keep ? keep.scrollLeft : 0;
       cur.replaceWith(row); row._fill(); var nr = row.querySelector(".rail"); if (nr && x) nr.scrollLeft = x; cur = row; }
@@ -158,7 +158,86 @@
     });
   }
 
-  window.VSB = { on: function () { return ON; }, toggle: toggle, searchInto: searchInto, prep: prep, play: play, label: function (t) { return t && t.site ? '<span class="sbl">ShowBox</span>' : ""; } };
+  // ---- ShowBox's own list pages (by year / country / genre, films or series) and its raw search pages, remembered 12 hours ----
+  var SBO = "https://www.showbox.media", PGC = ld("pg", {});
+  function pages(path, n, cb) {
+    var hit = PGC[path]; if (hit && Date.now() - hit.at < 12 * 3600000) return cb(hit.items, true);
+    var per = [], left = n;
+    for (var p = 1; p <= n; p++) (function (p) {
+      SR.get(SBO + path + (path.indexOf("?") >= 0 ? "&" : "?") + "page=" + p, function (html, code, fin) {
+        left--; per[p] = html ? SR.lite(html, fin || SBO + path).filter(function (c) { return /\/(movie|tv)\/[mt]-/.test(c.url); }).map(slim) : [];
+        var seen = {}, all = []; per.forEach(function (l) { (l || []).forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; all.push(c); } }); });
+        if (!left && all.length) { PGC[path] = { at: Date.now(), items: all }; var ks = Object.keys(PGC); if (ks.length > 60) delete PGC[ks[0]]; sv("pg", PGC); }
+        cb(all, !left);
+      });
+    })(p);
+  }
+  var SBC = { KR: "South Korea", JP: "Japan", IN: "India", CN: "China", HK: "Hong Kong", TW: "Taiwan", TH: "Thailand", GB: "United Kingdom", US: "United States", FR: "France",
+    DE: "Germany", ES: "Spain", IT: "Italy", MX: "Mexico", AU: "Australia", CA: "Canada", IE: "Ireland", DK: "Denmark", SE: "Sweden", NO: "Norway", FI: "Finland", BR: "Brazil",
+    PL: "Poland", NL: "Netherlands", BE: "Belgium", RU: "Russia", AR: "Argentina", NZ: "New Zealand", ZA: "South Africa", IL: "Israel" };
+  var SBG = { act: 1, adv: 2, ani: 3, cmy: 5, crm: 6, doc: 7, drm: 8, fml: 9, fnt: 10, hst: 12, hrr: 13, msc: 14, rma: 16, scf: 17, spt: 18, trl: 19, war: 20, wsn: 21, rly: 24 };
+  function listFor(P) {
+    var yr = P.year ? String(P.year) : P.era ? P.era[0] + "-" + P.era[1] : "", g = (P.genres || []).map(function (x) { return SBG[x]; }).filter(Boolean).join("-"),
+      cc = P.cc && SBC[P.cc[0]], out = [];
+    function qs(o) { return Object.keys(o).filter(function (k) { return o[k]; }).map(function (k) { return k + "=" + encodeURIComponent(o[k]); }).join("&"); }
+    if (!yr && !g && !cc) return out;
+    if (P.type !== "SHOW") out.push({ type: "MOVIE", path: "/movie?" + qs({ country: cc, release_year: yr, genre: g }) });
+    if (P.type !== "MOVIE" && !cc) out.push({ type: "SHOW", path: "/tv?" + qs({ release_year: yr, genre: g }) });   // ShowBox can't filter series by country
+    return out;
+  }
+  // "Korean movies on ShowBox", "2016 on ShowBox": ShowBox's own filtered lists, the titles Vesper knows first
+  var btok = 0;
+  function browse(P, onItems) {
+    var L = listFor(P); if (!ON || !L.length) return false;
+    var my = ++btok, got = {}, fin = {}, cc = P.cc && P.cc[0];
+    L.forEach(function (x) { pages(x.path, 3, function (items, done) { if (my !== btok) return;
+      got[x.path] = items.map(function (c) { var t = T(c); if (t.sb && cc && !(t.countries || []).length) t.countries = [cc]; return t; }); if (done) fin[x.path] = 1;
+      var all = [], seen = {}; L.forEach(function (y) { (got[y.path] || []).forEach(function (t) { if (!seen[t.id] && (!P.type || t.type === P.type)) { seen[t.id] = 1; all.push(t); } }); });
+      var known = all.filter(function (t) { return !t.sb; }).sort(function (a, b) { return (b.imdb || 6) - (a.imdb || 6); });
+      onItems(known.concat(all.filter(function (t) { return t.sb; })), Object.keys(fin).length === L.length); }); });
+    return true;
+  }
+  // everything a person / studio made that ShowBox has: ShowBox's search for the name first (it looks in cast lists too),
+  // then the rest of the filmography title by title (3 at a time, best-known first). Answers remembered.
+  var HAS2 = ld("has2", {}), h2T = null, wtok = 0;
+  function h2save() { clearTimeout(h2T); h2T = setTimeout(function () { var ks = Object.keys(HAS2); if (ks.length > 3000) ks.slice(0, 600).forEach(function (k) { delete HAS2[k]; }); sv("has2", HAS2); }, 1500); }
+  function wkey(w) { return norm(w.t) + "|" + (w.y || "") + "|" + w.type; }
+  function tyOf(c) { return /\/tv\/|\/t-/.test(c.url) ? "SHOW" : "MOVIE"; }
+  function one(w, cb) {
+    var k = wkey(w), v = HAS2[k];
+    if (v && v.url) return cb(v); if (typeof v === "number" && Date.now() - v < 4 * 864e5) return cb(null);   // a "no" is re-checked after 4 days
+    SR.get(SBO + "/search?keyword=" + encodeURIComponent(w.t) + "&type=" + (w.type === "SHOW" ? "tv" : "movie"), function (html, code, fin) {
+      var list = html ? SR.lite(html, fin || SBO).filter(function (c) { return /\/(movie|tv)\/[mt]-/.test(c.url); }) : null;
+      var hit = (list || []).filter(function (c) { var y = yearOf(c); return norm(c.title) === norm(w.t) && (!w.y || !y || Math.abs(y - w.y) <= 1) && tyOf(c) === w.type; })[0];
+      if (hit) HAS2[k] = slim(hit); else if (list) HAS2[k] = Date.now(); h2save(); cb(hit ? slim(hit) : null); });
+  }
+  function works(list, name, type, onItems) {
+    var my = ++wtok, found = {}, byName = {};
+    list = list.filter(function (w) { return !type || w.type === type; });
+    list.forEach(function (w) { var n = norm(w.t); (byName[n] = byName[n] || []).push(w); });
+    function emit(done) { if (my !== wtok) return; var out = [], seen = {};
+      list.forEach(function (w) { var c = found[wkey(w)]; if (!c) return; var t = T(c); if (!seen[t.id]) { seen[t.id] = 1; out.push({ w: w, t: t }); } }); onItems(out, done); }
+    function match(c) { (byName[norm(c.title)] || []).forEach(function (w) { var y = yearOf(c);
+      if (tyOf(c) === w.type && (!w.y || !y || Math.abs(w.y - y) <= 1) && !found[wkey(w)]) { found[wkey(w)] = c; HAS2[wkey(w)] = c; } }); }
+    list.forEach(function (w) { var v = HAS2[wkey(w)]; if (v && v.url) found[wkey(w)] = v; });   // known from before: instant
+    emit(false);
+    var started = false;
+    pages("/search?keyword=" + encodeURIComponent(name) + (type ? "&type=" + (type === "SHOW" ? "tv" : "movie") : ""), 3, function (items, done) {
+      if (my !== wtok) return; items.forEach(match); h2save(); emit(false); if (done && !started) { started = true; rest(); } });
+    function rest() {
+      var todo = list.filter(function (w) { return !found[wkey(w)]; }).slice(0, 70), i = 0, run = 0;
+      if (!todo.length) return emit(true);
+      (function pump() { if (my !== wtok) return;
+        while (run < 3 && i < todo.length) (function (w) { run++; one(w, function (c) { run--; if (c) { found[wkey(w)] = c; emit(false); }
+          if (i >= todo.length && !run) emit(true); else setTimeout(pump, 0); }); })(todo[i++]); })();
+    }
+  }
+  function cancel() { tok++; btok++; wtok++; }
+
+  window.VSB = { on: function () { return ON; }, toggle: toggle, searchInto: searchInto, prep: prep, play: play, browse: browse, works: works, cancel: cancel, T: T,
+    cached: function () { var out = [], seen = {}; Object.keys(SQC).forEach(function (k) { (SQC[k] || []).forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); });
+      ((C.home && C.home.rows) || []).concat((C.more && C.more.lists) || []).forEach(function (r) { r.items.forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); }); return out; },
+    label: function (t) { return t && t.site ? '<span class="sbl">ShowBox</span>' : ""; } };
   if (S.SECTIONS) wrapSections();   // before the first screen is drawn
   function start() { if (!S.ALL || !S.SECTIONS) return setTimeout(start, 300); wrapSections(); boot(); }
   start();
