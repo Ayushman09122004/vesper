@@ -868,3 +868,14 @@ html.desk .hero .inf,html.desk .hero .sh,html.desk .hero .svc{z-index:1;}
 .nfwf{margin-top:5px;font-size:15px;line-height:1.5;cursor:pointer}.nfwf span{font-size:12px;color:rgba(255,255,255,.55);margin-left:4px;text-decoration:underline dotted}
 .nfwl{display:none;margin-top:6px;font-size:12.5px;line-height:1.7;color:rgba(255,255,255,.7)}.nfwt.open .nfwl{display:block}
 .nfwno{padding:10px 0;color:rgba(255,255,255,.6);font-size:13.5px}
+
+/* v36 — pixel mark + roomier rhythm */
+.hrow .logo.pix{width:30px;height:30px;border-radius:0;box-shadow:none;image-rendering:pixelated;image-rendering:crisp-edges;filter:drop-shadow(0 2px 10px rgba(240,138,82,.35));}
+.row{margin-bottom:34px;}
+.row-h{padding-bottom:12px;letter-spacing:-.35px;}
+.row-h small{font-size:12.5px;letter-spacing:0;}
+.rail{gap:10px;}
+.pc,.wide{border-radius:9px;}
+.pc{box-shadow:0 6px 18px rgba(0,0,0,.28);}
+.sec-h{margin-top:6px;}
+html.desk .row{margin-bottom:40px;}

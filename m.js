@@ -169,7 +169,7 @@
       if (sec === "throwback") { var ce = S.pref("era", "e10");
         chips = '<button class="chip x" data-go="home">' + G.x + "</button>" + ERAS.map(function (x) { return '<button class="chip era' + (x.k === ce ? " on" : "") + '" data-era="' + x.k + '">' + x.label + "</button>"; }).join(""); }
       var title = inSec ? esc(SECT_NAMES[sec] || "") : p ? "For " + esc(p.name) : "Home";
-      top.innerHTML = '<div class="hrow"><img class="logo" src="icons/icon-180.png" alt=""><h1>' + title + "</h1>" +
+      top.innerHTML = '<div class="hrow"><img class="logo pix" src="icons/vesper-mark.svg" alt="Vesper"><h1>' + title + "</h1>" +
         '<button class="hbtn" data-pick title="Pick for me">' + G.dice + '</button><button class="hbtn" data-tab="search">' + G.search + "</button></div><div class=\"chips\">" + chips + "</div>";
     } else {
       var T = { "new": "New & Hot", weather: "Weather", search: "Search", mylist: "My Vesper" }[tab];
@@ -1704,7 +1704,7 @@
   // opened in Safari instead of from the Home Screen: show how to install
   var standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
   if (!standalone && /iPhone|iPad/.test(navigator.userAgent)) setTimeout(function () {
-    var c = h("div", "coach", '<img src="icons/icon-180.png"><div><b>Put Vesper on your Home Screen</b>Tap <span class="sh">' + G.share + '</span> below, then <b>Add to Home Screen</b>.</div><button>' + G.x + "</button>");
+    var c = h("div", "coach", '<img src="icons/vp-icon-180.png"><div><b>Put Vesper on your Home Screen</b>Tap <span class="sh">' + G.share + '</span> below, then <b>Add to Home Screen</b>.</div><button>' + G.x + "</button>");
     document.body.appendChild(c); c.querySelector("button").onclick = function () { c.remove(); };
   }, 1500);
   // everything else on your apps, after the first screen: search and sections can then find any title

@@ -122,6 +122,9 @@
     ".fsrv button.bad{opacity:.45}.fsrv button.ok small{color:#7be0a8}" +
     ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
     ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
+    ".gpi{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#ff4f7a,#ff9a5a);color:#fff;font:900 9.5px -apple-system,system-ui,sans-serif;margin-right:8px;flex:none}" +
+    ".btn.gp{display:flex;align-items:center;justify-content:center;text-decoration:none;color:#fff;background:rgba(255,255,255,.1)}" +
+    ".fsgp{display:flex;align-items:center;justify-content:center;width:100%;height:42px;border-radius:12px;background:rgba(255,255,255,.07);color:#fff;text-decoration:none;font:600 14px -apple-system,system-ui,sans-serif;margin-bottom:8px}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
     ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
     ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
@@ -191,6 +194,7 @@
       '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
       (NOADS && !(P && P.allowAds) ? '<p class="fsnote" style="margin-top:-2px">Vesper only tries these when no ad-free server has the title. You can still tap one.</p>' : "") +
       '<div class="fsrv fsrvad">' + ads.map(cell).join("") + "</div>" +
+      '<a class="fsgp" href="' + esc(gpUrl(P.t)) + '" target="_blank" rel="noopener"><span class="gpi">GP</span>Search “' + esc(P.t.title) + '” on GoPlay ↗</a>' +
       '<button class="fsnx" data-fsnexts style="width:100%;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer">Not playing? Try the next server</button>' +
       '<p class="fsnote">Free players from other sites. If one shows nothing, Vesper moves to the next by itself — tap the picture or Stay to keep one. 🔒 servers run locked, so their pop-up and redirect ads can’t open. Ads drawn inside a player’s own picture can’t be removed from outside it.</p>';
     d.innerHTML = html; mark();
@@ -307,10 +311,15 @@
     return true;
   }
 
+  // ---------- GoPlay: opens GoPlay's own search for the exact title (its pages can't be looked up from a phone) ----------
+  var ASIA = { KR: 1, JP: 1, CN: 1, TW: 1, HK: 1, TH: 1, PH: 1, VN: 1, ID: 1, MY: 1, SG: 1 };
+  function gpUrl(t) { return "https://goplay.su/?search=" + encodeURIComponent(String(t.title || "").replace(/\s*\(.*?\)\s*/g, " ").trim()); }
+  function gpFits(t) { return !!t && (t.countries || []).some(function (c) { return ASIA[c]; }); }
+  function gpBtn(t) { return '<a class="btn wide gp" href="' + esc(gpUrl(t)) + '" target="_blank" rel="noopener"><span class="gpi">GP</span>Open on GoPlay</a>'; }
   // ---------- title page / hover button ----------
   function btn(t, big) {
     if (!can(t)) return "";
-    return '<button class="btn ' + (big ? "play big free" : "wide free") + '" data-free="' + esc(t.id) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Watch free</button>';
+    return '<button class="btn ' + (big ? "play big free" : "wide free") + '" data-free="' + esc(t.id) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Watch free</button>' + (gpFits(t) ? gpBtn(t) : "");
   }
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-free]"); if (!b) return;
@@ -353,23 +362,54 @@
     return b;
   }
 
-  // ---------- rows for Home / Films / Series from Cinemeta's lists (cached 12h, fetched in the background) ----------
-  var Y = new Date().getFullYear();
-  var LISTS = {
-    home: [["movie/top", "Popular films · watch free"], ["series/top", "Popular series · watch free"]],
-    movies: [["movie/year/genre=" + Y, "New films of " + Y + " · watch free"], ["movie/top", "Popular films · watch free"], ["movie/imdbRating", "Highest rated · watch free"]],
-    shows: [["series/year/genre=" + Y, "New series of " + Y + " · watch free"], ["series/top", "Popular series · watch free"], ["series/imdbRating", "Highest rated series · watch free"]]
-  };
+  // ---------- free rows: trending + new + genre picks from Cinemeta, a different mix every visit, spread through the page ----------
+  var Y = new Date().getFullYear(), LAUNCH = (+ld("launch", 0) || 0) + 1; sv("launch", LAUNCH);
+  var MG = ["Action", "Comedy", "Thriller", "Horror", "Romance", "Sci-Fi", "Animation", "Drama", "Crime", "Mystery", "Fantasy", "Adventure", "Family", "Documentary"];
+  var SG = ["Drama", "Comedy", "Crime", "Sci-Fi", "Animation", "Thriller", "Fantasy", "Mystery", "Reality-TV", "Documentary", "Action"];
+  var GW = { "Sci-Fi": "sci-fi", "Reality-TV": "reality", Documentary: "documentary", Animation: "animated" };
+  function gw(g) { return GW[g] || g.toLowerCase(); }
+  function seeded(seed) { var s = seed % 2147483647; if (s <= 0) s += 2147483646; return function () { s = s * 16807 % 2147483647; return (s - 1) / 2147483646; }; }
+  function hash(str) { var h = 7; for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); }
+  function shuffle(a, rnd) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
+  function core(id) {
+    if (id === "home") return [{ t: "Trending now", k: ["movie/top", "series/top"] }, { t: "New this year", k: ["movie/year/genre=" + Y, "series/year/genre=" + Y], fresh: 1 }];
+    if (id === "movies") return [{ t: "Trending films", k: ["movie/top"] }, { t: "New films of " + Y, k: ["movie/year/genre=" + Y], fresh: 1 }];
+    if (id === "shows") return [{ t: "Trending series", k: ["series/top"] }, { t: "New series of " + Y, k: ["series/year/genre=" + Y], fresh: 1 }];
+    if (id === "anime") return [{ t: "Trending anime & animation", k: ["series/top/genre=Animation", "movie/top/genre=Animation"] }];
+    return [];
+  }
+  function extra(id) {
+    var r = [], mv = id === "home" || id === "movies", se = id === "home" || id === "shows";
+    if (mv) { r.push({ t: "Fresh from " + (Y - 1), k: ["movie/year/genre=" + (Y - 1)] }, { t: "All-time great films", k: ["movie/imdbRating"] });
+      MG.forEach(function (g) { r.push({ t: "Trending " + gw(g) + " films", k: ["movie/top/genre=" + g] }); }); }
+    if (se) { r.push({ t: "Series from " + (Y - 1), k: ["series/year/genre=" + (Y - 1)] }, { t: "All-time great series", k: ["series/imdbRating"] });
+      SG.forEach(function (g) { r.push({ t: "Trending " + gw(g) + " series", k: ["series/top/genre=" + g] }); }); }
+    return r;
+  }
+  var NX = { home: 4, movies: 3, shows: 3, anime: 0 };
+  function picks(id, launch) { return core(id).concat(shuffle(extra(id), seeded(launch * 977 + hash(id))).slice(0, NX[id] || 0)); }
+  var LISTS = { home: 1, movies: 1, shows: 1, anime: 1 };
   var busy = {};
   function list(key) {
     var c = CAT[key];
     if ((!c || Date.now() - c.at > 12 * 3600000) && !busy[key]) { busy[key] = 1;
       get(CM + "/catalog/" + key + ".json", 12000).then(function (j) {
-        CAT[key] = { at: Date.now(), m: (j.metas || []).slice(0, 40).map(function (m) { return { id: m.id, name: m.name, type: m.type, releaseInfo: m.releaseInfo, imdbRating: m.imdbRating, description: (m.description || "").slice(0, 400), background: m.background }; }) };
+        CAT[key] = { at: Date.now(), m: (j.metas || []).slice(0, 40).map(function (m) { return { id: m.id, name: m.name, type: m.type, releaseInfo: m.releaseInfo, imdbRating: m.imdbRating, description: (m.description || "").slice(0, 300), background: m.background }; }) };
+        var ks = Object.keys(CAT).filter(function (k) { return !/^air/.test(k); }).sort(function (x, y) { return CAT[x].at - CAT[y].at; }); ks.slice(0, Math.max(0, ks.length - 30)).forEach(function (k) { delete CAT[k]; });
         sv("cat", CAT); busy[key] = 0;
       }).catch(function () { busy[key] = 0; }); }
-    return c ? c.m.map(T).filter(Boolean) : [];
+    return c ? c.m : [];
   }
+  // blend the row's lists, lean to newer titles on "fresh" rows, then shake the order a little so every visit looks different
+  function build(rc, seen, hid, rnd) {
+    var ls = rc.k.map(list), out = [], n = Math.max.apply(null, ls.map(function (l) { return l.length; }).concat([0]));
+    for (var i = 0; i < n; i++) ls.forEach(function (l) { if (l[i]) out.push(l[i]); });
+    var items = out.map(function (m, i) { var y = yr(m); return { m: m, s: i - (rc.fresh ? 0 : (y >= Y - 1 ? 6 : y >= Y - 3 ? 3 : 0)) + rnd() * 7 }; })
+      .sort(function (x, y) { return x.s - y.s; }).map(function (x) { return T(x.m); })
+      .filter(function (t) { if (!t || hid[t.id] || seen[t.id]) return false; seen[t.id] = 1; return true; });
+    return items;
+  }
+  // Airing today (series): TVmaze's schedule — streaming + US/UK/Korea/India TV — matched to IMDb ids so they play free
   // Airing today (series): TVmaze's schedule — streaming + US/UK/Korea/India TV — matched to IMDb ids so they play free
   function airing() {
     var key = "air" + new Date().toISOString().slice(0, 10), c = CAT[key];
@@ -392,19 +432,21 @@
       var cw = cwList().filter(function (t) { return id === "home" || (id === "shows") === (t.type === "SHOW"); });
       if (cw.length) rows.splice(id === "home" ? 1 : 0, 0, S.R("Continue watching", cw, null, "free servers", 1, true));
     }
-    if (ON && (id === "shows" || id === "home")) { var air = airing(); if (air.length >= 6) rows.splice(Math.min(id === "home" ? 7 : 2, rows.length), 0, S.R("Airing today", air, null, "new episodes · watch free", 1, true)); }
     if (!ON || !LISTS[id]) return rows;
-    var at = id === "home" ? 5 : 2, hid = S.hiddenSet ? S.hiddenSet() : {};
-    LISTS[id].forEach(function (L, i) {
-      var items = list(L[0]).filter(function (t) { return !hid[t.id]; }); if (items.length < 6) return;
-      rows.splice(Math.min(at + i * 4, rows.length), 0, S.R(L[1], items, null, "free servers", 1, true));
-    });
+    var hid = S.hiddenSet ? S.hiddenSet() : {}, seen = {}, rnd = seeded(LAUNCH * 131 + hash(id)), add = [];
+    if (id === "shows" || id === "home") { var air = airing().filter(function (t) { return !hid[t.id]; }); if (air.length >= 6) add.push(S.R("Airing today", shuffle(air.slice(0, 12), rnd).concat(air.slice(12)), null, "new episodes · watch free", 1, true)); }
+    picks(id, LAUNCH).forEach(function (rc) { var items = build(rc, seen, hid, rnd); if (items.length >= 6) add.push(S.R(rc.t, items.slice(0, 30), null, "free servers", 1, true)); });
+    // core rows first, the rest shuffled; spread out: one free row every few of yours
+    var first = add.slice(0, id === "anime" ? 1 : 2), rest = shuffle(add.slice(first.length), rnd), order0 = first.concat(rest);
+    var at = id === "home" ? 3 : 2, gap = id === "home" ? 3 : 3;
+    order0.forEach(function (r, i) { rows.splice(Math.min(at + i * (gap + 1), rows.length), 0, r); });
     return rows;
   }
   function wrap() { Object.keys(LISTS).forEach(function (k) { var f = S.SECTIONS && S.SECTIONS[k]; if (typeof f !== "function" || f._fs) return;
     var g = function () { var r = f.apply(this, arguments); try { return mix(k, r); } catch (e) { return r; } }; g._fs = 1; Object.keys(f).forEach(function (p) { g[p] = f[p]; }); S.SECTIONS[k] = g; }); }
   wrap();
-  setTimeout(function () { if (ON) { Object.keys(LISTS).forEach(function (k) { LISTS[k].forEach(function (L) { list(L[0]); }); }); airing(); } }, 3000);
+  // fetch this visit's lists (and the next visit's, so they're ready) in the background
+  setTimeout(function () { if (!ON) return; Object.keys(LISTS).forEach(function (k) { [LAUNCH, LAUNCH + 1].forEach(function (L) { picks(k, L).forEach(function (rc) { rc.k.forEach(list); }); }); }); airing(); }, 2500);
 
   // "Free" badge on cards of titles only the free servers have
   if (window.VSB) { var lab = VSB.label; VSB.label = function (t) { if (!t || (t.avail || []).length) return ""; return t.site ? lab(t) : t.fs ? '<span class="sbl fsl">Free</span>' : ""; }; }
