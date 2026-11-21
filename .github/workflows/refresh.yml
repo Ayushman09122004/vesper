@@ -21,7 +21,7 @@ concurrency:
   group: catalog
   cancel-in-progress: false
 env:
-  JW_CACHE: .jwcache/answers.json.gz
+  JW_CACHE: jwcache/answers.json.gz
   JW_PACE_MS: "500"
   SKIP_IF_FRESH_HOURS: ${{ inputs.force && '0' || '20' }}
 jobs:
@@ -39,7 +39,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -55,7 +55,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -76,7 +76,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -92,7 +92,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -113,7 +113,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -129,7 +129,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -150,7 +150,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -166,7 +166,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -187,7 +187,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -203,7 +203,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -224,7 +224,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -240,7 +240,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -261,7 +261,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -277,7 +277,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -298,7 +298,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -314,7 +314,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -335,7 +335,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -351,7 +351,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
@@ -372,7 +372,7 @@ jobs:
         if: steps.have.outcome != 'success'
         uses: actions/download-artifact@v4
         continue-on-error: true
-        with: { name: progress, path: .jwcache }
+        with: { name: progress, path: jwcache }
       - uses: actions/setup-node@v4
         if: steps.have.outcome != 'success'
         with: { node-version: 22 }
@@ -388,7 +388,7 @@ jobs:
       - name: Hand progress on
         if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
         uses: actions/upload-artifact@v4
-        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+        with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
         if: steps.build.outputs.code == '0'
         uses: actions/upload-artifact@v4
