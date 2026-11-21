@@ -16,7 +16,7 @@
   function btns(t) {
     var g = G(), inL = S.inList("mylist", t.id), liked = S.list("likes").indexOf(t.id) >= 0, app = S.pickApp(t);
     var play = app ? '<button class="hb play" data-play="' + t.id + '" title="Play on ' + esc(S.LABEL[app] || "") + '">' + g.play + "</button>"
-      : t.site ? '<button class="hb play feb" data-feb="' + t.id + '" title="Play with FebBox">' + g.play + "</button>" : "";
+      : t.site ? '<button class="hb play feb" data-feb="' + t.id + '" title="Play with FebBox">' + g.play + "</button>" : window.VFS && VFS.can(t) ? '<button class="hb play" data-free="' + t.id + '" title="Watch free">' + g.play + "</button>" : "";
     return play + '<button class="hb" data-list="' + t.id + '" title="My List">' + (inL ? g.check : g.plus) + "</button>" +
       '<button class="hb' + (liked ? " on" : "") + '" data-like="' + t.id + '" title="I like this">' + g.heart + "</button><i></i>" +
       '<button class="hb" data-hmore="' + t.id + '" title="More info">' + g.down + "</button>";
@@ -74,7 +74,7 @@
     var c = card, t = S.T[c.dataset.id];
     if (e.target.closest("[data-hmute]")) { e.stopPropagation(); muted = !muted; cmd(c, muted ? "mute" : "unMute"); e.target.closest("[data-hmute]").innerHTML = muted ? G().muted : G().sound; return; }
     if (e.target.closest("[data-hmore],[data-hopen]")) { e.stopPropagation(); var pr = cur && cur.getBoundingClientRect(); hide(true); window.VUI.open(t.id, pr); return; }
-    if (e.target.closest("[data-play],[data-feb]")) { setTimeout(function () { hide(); }, 50); return; }
+    if (e.target.closest("[data-play],[data-feb],[data-free]")) { setTimeout(function () { hide(); }, 50); return; }
     // My List / Like: the app does the work; the buttons catch up a moment later
     setTimeout(function () { if (card === c && t) c.querySelector(".hbt").innerHTML = btns(t); }, 60);
   });

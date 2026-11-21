@@ -141,7 +141,7 @@
       exact.concat(loose && exact.length ? [] : mine.filter(function (t) { return ok.indexOf(t) >= 0; })).concat(loose && exact.length ? own.filter(function (t) { return close(t.title, qn); }) : own).forEach(function (t) { if (t && !seen[t.id] && okT(t)) { seen[t.id] = 1; items.push(t); } });
       if (!items.length) { if (SSR[qn]) { var sm = cur.querySelector && cur.querySelector("small"); if (sm) sm.textContent = "nothing for “" + q + "”"; var ph = cur.querySelector && cur.querySelector(".sbph"); if (ph) ph.remove(); } return; }
       var row = rowEl(S.R("On ShowBox", items.slice(0, 30), null, items.length + " · tap Play with FebBox", 1, true)), keep = cur.querySelector && cur.querySelector(".rail"), x = keep ? keep.scrollLeft : 0;
-      cur.replaceWith(row); row._fill(); var nr = row.querySelector(".rail"); if (nr && x) nr.scrollLeft = x; cur = row; }
+      row.classList.add("sbres"); cur.replaceWith(row); row._fill(); var nr = row.querySelector(".rail"); if (nr && x) nr.scrollLeft = x; cur = row; }
     if (SQC[qn]) SSR[qn] = SQC[qn];
     if (SSR[qn]) paint();   // seen this search before: instant
     setTimeout(function () { if (my !== tok) return;   // a short pause after typing

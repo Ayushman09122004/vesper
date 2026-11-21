@@ -89,9 +89,9 @@
   }
   function poster(t, i) {
     var c = h("div", "pc"); c.dataset.id = t.id;
-    var src = S.po(t, "s592"), lg = t.orig ? '<img class="lg" src="' + LOGO[t.orig] + '">' : "";
+    var app0 = t.orig || ((t.avail || []).length ? S.pickApp(t) || t.avail[0] : null), lg = app0 && LOGO[app0] ? '<img class="lg" src="' + LOGO[app0] + '" alt="' + esc(LABEL[app0] || "") + '">' : "", src = S.po(t, "s592");
     c.innerHTML = (src ? '<img class="p"' + (i != null && i < 6 ? "" : ' loading="lazy"') + ' decoding="async" src="' + src + '" onload="this.classList.add(\'ok\')" onerror="vImgErr(this)">' : "") +
-      '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t) + (window.VSB ? VSB.label(t) : "");
+      '<div class="nt"' + (src ? ' style="opacity:0"' : "") + ">" + esc(t.title) + "</div>" + lg + badge(t) + (window.VSB ? VSB.label(t) : "") + (window.VFS ? VFS.bar(t) : "");
     if (src) { var im = c.querySelector("img.p"); im.addEventListener("error", function () { if (im.dataset.f === "1" && !im.isConnected) c.querySelector(".nt").style.opacity = 1; setTimeout(function () { if (!im.isConnected) c.querySelector(".nt").style.opacity = 1; }, 50); }); }
     return c;
   }
@@ -653,6 +653,7 @@
     drawFilt(); row1.appendChild(seg); page.appendChild(row1); page.appendChild(filt);
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
     if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); row1.appendChild(sbt); }
+    if (window.VFS) { var fst = VFS.toggle(function () { run(); }); row1.appendChild(fst); }
     if (window.VNW) { var nwt = VNW.toggle(function () { run(); }); filt.parentNode ? page.insertBefore(h("div", "nfwrow"), filt).appendChild(nwt) : row1.appendChild(nwt); }
     chips.style.margin = "0 0 14px"; page.appendChild(chips); page.appendChild(body);
     inp.value = arg || "";
@@ -754,6 +755,7 @@
         if (MODE === "country") { body.appendChild(h("div", "sec-h", "Pick a country")); body.appendChild(h("div", "chips pad", chipsHTML(CWORDS))); return; }
         var rec = S.list("queries").slice(0, 8);
         chips.innerHTML = chipsHTML(rec);
+        if (window.VFS) body.appendChild(VFS.sources(page, run));
         var seenIds = S.list("viewed").slice(0, 16), seen = S.ids(seenIds).filter(function (x) { return (x.avail || []).length; });
         if (seen.length >= 2) { var rv = rowEl(S.R("Recently Viewed", seen, null, null, 1, true)); body.appendChild(rv); rv._fill(); }
         var quick = h("div", "quick");
@@ -798,6 +800,7 @@
       S.prefetchFull([R.top].concat(R.titles || []));
       var P = parseQuery(useQ); P.type = ty;
       if (window.VNW && (MODE === "all" || MODE === "title")) VNW.searchInto(body, useQ, R);
+      if (window.VFS && VFS.on()) VFS.searchInto(body, useQ, R, rowEl, { type: ty });
       if (window.VSB && VSB.on()) {
         VSB.searchInto(body, useQ, R, rowEl, { type: ty });
         if (P.structured && !P.who) { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
@@ -831,6 +834,8 @@
         body.appendChild(tp);
       }
       if (R.titles.length) { body.appendChild(h("div", "sec-h", R.top ? "Also matching" : "Titles")); body.appendChild(gridOf(R.titles)); }
+      // your apps first: ShowBox and free-server rows sit right after your apps' matches
+      if (R.top || R.titles.length) { var oe = h("div", "ownend"); body.appendChild(oe); [].slice.call(body.querySelectorAll(".sbres")).forEach(function (x) { body.insertBefore(x, oe); }); }
       if (R.similar.length) { var row = rowEl(S.R("More like " + R.top.title, R.similar)); body.appendChild(row); row._fill(); }
       if (R.vibe.length) { body.appendChild(h("div", "sec-h", "The “" + esc(R.label) + "” vibe")); body.appendChild(gridOf(R.vibe)); }
     }
@@ -1330,9 +1335,11 @@
   var fromRect = null;
   function openDetail(id) {
     var t = S.T[id]; if (!t) return;
-    if (t._lite) return S.full(t, function () { openDetail(id); });   // one of the extras: its details first (one small file) if (window.VDESK) { bbStop(document); if (window.VHOV) VHOV.hide(true); } curT = t; S.markViewed(t.id); buzz();
+    if (t._lite) return S.full(t, function () { openDetail(id); });   // one of the extras: its details first (one small file)
+    if (window.VDESK) { bbStop(document); if (window.VHOV) VHOV.hide(true); }
+    curT = t; S.markViewed(t.id); buzz();
     var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t), rank = rankOf(t), arr = S.arrivalOf(t);
-    var others = apps.filter(function (a) { return a !== best; }), inL = S.inList("mylist", t.id);
+    var others = apps.filter(function (a) { return a !== best; }), inL = S.inList("mylist", t.id), fsb = !!(window.VFS && VFS.on() && VFS.can(t));
     var meta = [t.year ? "<span>" + t.year + "</span>" : "", t.cert ? '<span class="box">' + esc(t.cert) + "</span>" : "", "<span>" + esc(S.length(t)) + "</span>", '<span class="box">HD</span>', t.imdb ? '<span class="imdb">IMDb ' + t.imdb.toFixed(1) + "</span>" : ""].filter(Boolean).join("");
     var plays = best ? '<button class="btn play big" data-play="' + t.id + '" data-app="' + best + '">' + G.play + 'Play<img src="' + LOGO[best] + '"></button>'
       : '<div class="soonbox">' + G.bell + (soon ? "Coming " + new Date(soon.date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + (soon.app ? " on " + LABEL[soon.app] : "") : "Not streaming on your apps right now") + "</div>";
@@ -1340,7 +1347,7 @@
     d.innerHTML = '<div class="dtop"></div><div class="dbar"><span>' + esc(t.title) + '</span></div><button class="dclose" data-close>' + G.x + '</button><div class="dart"><img decoding="async" fetchpriority="high" src="' + S.bd(t, "s1440") + '" onerror="vImgErr(this)"><div class="g"></div></div><div class="dbody">' +
       tagLine(t) + "<h2>" + esc(t.title) + '</h2><div class="dmeta">' + meta + "</div>" +
       (rank ? '<div class="drank"><span class="t10">TOP<br>10</span>' + esc(rank) + "</div>" : arr ? '<div class="drank new">' + (arr.season > 1 ? "New season just added" : "Just added") + "</div>" : "") +
-      (t.site && !best ? '<button class="btn play big feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : plays) + (t.site && best ? '<button class="btn wide feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : "") + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
+      (t.site && !best ? '<button class="btn play big feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : !best && fsb ? VFS.btn(t, true) : plays) + (t.site && best ? '<button class="btn wide feb" data-feb="' + t.id + '">' + G.play + "Play with FebBox</button>" : "") + (fsb && (best || t.site) ? VFS.btn(t, false) : "") + '<button class="btn wide" data-list="' + t.id + '">' + (inL ? G.check + "In My List" : G.plus + "My List") + "</button>" +
       (others.length ? '<div class="also"><small>Also on</small>' + others.map(function (a) { return '<button data-play="' + t.id + '" data-app="' + a + '"><img src="' + LOGO[a] + '">' + LABEL[a] + "</button>"; }).join("") + "</div>" : "") +
       '<div class="desc">' + esc(t.desc || "") + "</div>" +
       '<div class="credits">' + (cast.length ? '<div class="cl">Cast: ' + cast.slice(0, 3).map(esc).join(", ") + (cast.length > 3 ? '<span class="more" data-more> … more</span><span class="rest">, ' + cast.slice(3).map(esc).join(", ") + "</span>" : "") + "</div>" : "") +
@@ -1354,6 +1361,7 @@
     dtab(t.type === "SHOW" ? "eps" : "more");
     startPreview(t);
     if (window.VSB && t.site) VSB.prep(t, d.querySelector(".desc"));
+    if (window.VFS) VFS.prep(t, d);
   }
   function actsHTML(t) {
     var lk = S.inList("likes", t.id), no = S.inList("dislikes", t.id);
@@ -1403,7 +1411,7 @@
       var seasons = Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return { n: n, eps: by[n] }; });
       if (!seasons.length) throw new Error("empty");
       return seasons;
-    }).catch(function (e) { delete EPS[t.id]; throw e; }));
+    }).catch(function (e) { if (window.VFS && t.fs) return VFS.guide(t); throw e; }).catch(function (e) { delete EPS[t.id]; throw e; }));
   }
   // Up Next: remember the last episode you opened, per profile
   function epKey() { return "epsdone" + (S.state.profile ? "@" + S.state.profile : ""); }
@@ -1439,7 +1447,7 @@
         el.appendChild(e);
       });
       box._nx = nx;
-      box.insertAdjacentHTML("beforeend", '<div class="epnote">Tap an episode to open ' + esc(LABEL[app] || "the app") + " — it picks up where you left off.</div>");
+      box.insertAdjacentHTML("beforeend", '<div class="epnote">' + (app ? "Tap an episode to open " + esc(LABEL[app]) + " — it picks up where you left off." : "Tap an episode to watch it free.") + "</div>");
     }).catch(function () {
       if (curT !== t) return;
       box.innerHTML = '<div class="note">' + (t.seasons ? esc(S.length(t)) + (t.eps ? " · " + t.eps + " episodes" : "") + ". " : "") +
@@ -1451,8 +1459,9 @@
     sheet("<h3>Seasons</h3>" + ss.map(function (s) { return '<button class="opt" data-season="' + s.n + '"><span>Season ' + s.n + "</span><small>" + s.eps.length + " episodes</small></button>"; }).join(""));
   }
   function playEp(t, ep) {
-    var app = epApp(t); if (!app) return;
+    var app = epApp(t);
     if (ep.s) markEp(t, ep);
+    if (!app) { if (window.VFS) VFS.play(t, { s: ep.s, e: ep.n }); return; }
     if (app === "netflix") { S.markRecent(t.id); return window.V.call("play", { app: app, url: ep.links.netflix || S.playUrl(app, t) }); }
     S.playEpisode(t, app, ep);
   }
@@ -1611,7 +1620,7 @@
     var id = D.id || (el.closest("[data-id]") || {}).dataset && el.closest("[data-id]").dataset.id;
     if (id) { var src = el.closest(".pc,.wide,.hero,.nh .art,.li") || el; fromRect = src.getBoundingClientRect(); closeSheet(); openDetail(id); }
   });
-  window.addEventListener("popstate", function () { closeDetail(true); });
+  window.addEventListener("popstate", function () { if (window.VFS && VFS.popped()) return; closeDetail(true); });
   $("detail").addEventListener("scroll", island, { passive: true });
 
   // the moment a finger lands on a poster, start fetching its big artwork so the page opens ready
