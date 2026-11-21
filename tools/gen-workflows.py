@@ -31,6 +31,11 @@ def bot(r, n):
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Yesterday's data (from the live site)
+        run: |
+          git fetch -q origin gh-pages 2>/dev/null || exit 0
+          for f in catalog.json catalog-more.json catalog-more netflix-world.json trailers.json; do
+            git cat-file -e FETCH_HEAD:$f 2>/dev/null && {{ rm -rf $f; git archive FETCH_HEAD $f | tar -x; }}; done; true
       - id: have
         name: Already built by an earlier bot?
         uses: actions/download-artifact@v4
@@ -81,10 +86,7 @@ def publish(r):
         timeout-minutes: 20
         run: |
           node tools/trailers.mjs 600 || true
-          git add trailers.json
-          git diff --cached --quiet && exit 0
-          git commit -m "Trailers $(date -u +%F)"
-          for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done
+          mkdir -p .tr && cp trailers.json .tr/ && bash tools/deploy-site.sh .tr
 """ if r["trailers"] else ""
     return f"""  publish:
     needs: [{allbots}]
@@ -93,6 +95,11 @@ def publish(r):
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Yesterday's data (from the live site)
+        run: |
+          git fetch -q origin gh-pages 2>/dev/null || exit 0
+          for f in catalog.json catalog-more.json catalog-more netflix-world.json trailers.json; do
+            git cat-file -e FETCH_HEAD:$f 2>/dev/null && {{ rm -rf $f; git archive FETCH_HEAD $f | tar -x; }}; done; true
       - uses: actions/setup-node@v4
         with: {{ node-version: 22 }}
       - id: got
@@ -112,13 +119,7 @@ def publish(r):
           echo "fresh=1" >> "$GITHUB_OUTPUT"
       - name: Publish
         if: steps.ok.outputs.fresh == '1'
-        run: |
-          git config user.name "Vesper robot"
-          git config user.email "actions@users.noreply.github.com"
-          git add {adds}
-          git diff --cached --quiet && echo "no change" && exit 0
-          git commit -m "{r["name"]} $(date -u +%F)"
-          for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done; exit 1
+        run: bash tools/deploy-site.sh .done   # one snapshot on gh-pages — no history, the repo never grows
 {trailers}      - name: Nothing new — tell the owner if it's getting old
         if: ${{{{ !cancelled() && steps.ok.outputs.fresh != '1' }}}}
         env: {{ GH_TOKEN: "${{{{ github.token }}}}" }}

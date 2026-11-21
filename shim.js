@@ -38,15 +38,18 @@
     if (app === "youtube") { var v = web.match(/[?&]v=([\w-]{11})/); return { app: v ? "youtube://www.youtube.com/watch?v=" + v[1] : "youtube://" + web.replace(/^https:\/\//, ""), web: web }; }
     return { app: null, web: web };
   }
-  function openUrl(u) { var a = document.createElement("a"); a.href = u; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); }
+  // web pages always open in a NEW tab, so Vesper stays where you left it
+  function openUrl(u, tab) { var a = document.createElement("a"); a.href = u; a.rel = "noopener"; if (tab && /^https?:/.test(u)) a.target = "_blank"; document.body.appendChild(a); a.click(); a.remove(); }
+  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   function openService(app, url) {
     var L = links(app, url);
-    if (!L.app) return openUrl(L.web);
+    if (!L.app || !IOS) return openUrl(L.web, true);   // laptop: straight to a new tab, inside the click
+    // iPhone: the app first; if it didn't open, its website in a new tab
     var left = false;
     function gone() { if (document.hidden) left = true; }
     document.addEventListener("visibilitychange", gone);
     openUrl(L.app);
-    setTimeout(function () { document.removeEventListener("visibilitychange", gone); if (!left && !document.hidden) openUrl(L.web); }, 1600);
+    setTimeout(function () { document.removeEventListener("visibilitychange", gone); if (!left && !document.hidden) { var w = null; try { w = window.open(L.web, "_blank"); if (w) w.opener = null; } catch (e) {} if (!w) openUrl(L.web, true); } }, 1600);
   }
   G.vesperOpen = openService;
 

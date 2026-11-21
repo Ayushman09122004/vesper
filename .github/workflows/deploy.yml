@@ -1,0 +1,16 @@
+# Republishes the website (gh-pages snapshot: code on main + the live data) whenever the code changes.
+# Data updates are published by the bot relays themselves (refresh.yml, netflix-world.yml).
+name: Publish site
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/deploy-site.sh
