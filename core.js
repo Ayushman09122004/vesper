@@ -18,7 +18,7 @@
     " offers(country:IN,platform:WEB){ monetizationType standardWebURL package{shortName} }";
   var Q_SEG = "query Seg($first:Int!,$after:String,$filter:TitleFilter,$sortBy:PopularTitlesSorting!){" +
     " popularTitles(country:IN,first:$first,after:$after,sortBy:$sortBy,filter:$filter){ pageInfo{endCursor hasNextPage} edges{node{ " + FIELDS + " }} } }";
-  var Q_NEW = "query New($date:Date!,$first:Int!,$filter:TitleFilter){ newTitles(country:IN,date:$date,first:$first,filter:$filter){ edges{" +
+  var Q_NEW = "query New($date:Date!,$first:Int!,$after:String,$filter:TitleFilter){ newTitles(country:IN,date:$date,first:$first,after:$after,filter:$filter){ pageInfo{hasNextPage endCursor} edges{" +
     " newOffer(platform:WEB){ monetizationType package{shortName} }" +
     " node{ __typename ... on MovieOrShow{ " + FIELDS + " } ... on Season{ content(country:IN,language:\"en\"){seasonNumber} show{ " + FIELDS + " } } } } } }";
   var Q_SOON = "query Soon($first:Int!,$after:String,$filter:TitleFilter){ popularTitles(country:IN,first:$first,after:$after,sortBy:POPULAR,filter:$filter){" +
@@ -154,6 +154,33 @@
     }
   }
 
+  /* "New on your apps", newest-news first: JustWatch lists hundreds of arrivals a week in no useful order, most of them
+     back-catalogue dumps (all 9 seasons of an old show, weekly wrestling). Brand-new series/films, the latest season of a
+     show, originals and what's climbing the charts go first; bulk dumps and long-runners go to the back. Every app keeps
+     this order, so it's fixed here once for web, Mac and TV. */
+  function rankArrivals(list, titles, now) {
+    var Y = now.getFullYear(), cnt = {};
+    list.forEach(function (a) { cnt[a.id] = (cnt[a.id] || 0) + 1; });
+    function score(a) {
+      var t = titles[a.id] || {}, s = 0, yr = t.year || 0, days = Math.max(0, (now - Date.parse(a.date)) / 864e5);
+      if (t.type === "MOVIE") s += yr >= Y - 1 ? 40 : yr >= Y - 3 ? 12 : 0;
+      else if (a.season > 1) s += t.seasons && a.season >= t.seasons ? (yr >= Y - 12 ? 38 : 12) : 0;   // latest season of a show
+      else s += yr >= Y - 1 ? 45 : yr >= Y - 3 ? 12 : 0;                                                    // a series' first season
+      if (t.orig) s += 12;
+      if (t.rank && t.rank <= 1000) s += 45 * (1 - Math.log(t.rank) / Math.log(1000));
+      if (t.trend === "UP") s += 4;
+      s += Math.min(10, Math.log(1 + (t.pop || 0)) / Math.LN2 * 1.5);
+      if ((t.imdb || 0) >= 7.5 && (t.votes || 0) >= 1000) s += 5;
+      if (cnt[a.id] >= 3) s -= 40;            // many seasons dropped at once = back catalogue
+      if ((t.seasons || 0) >= 15) s -= 25;    // weekly/long-running shows
+      return s - 2 * days;
+    }
+    // best entry per title first, then the rest (season rows, etc.), so arrivals() de-dup keeps the right one
+    var sc = list.map(function (a, i) { return { a: a, s: score(a), i: i }; });
+    sc.sort(function (x, y) { return y.s - x.s || x.i - y.i; });
+    return sc.map(function (x) { return x.a; });
+  }
+
   /* build({prev, onProgress, pause}) -> catalog
      prev: the previous catalog (keeps Originals flags so only new titles need checking) */
   async function build(opts) {
@@ -199,8 +226,8 @@
     var arrivals = [], seenArr = {};
     for (var k = 0; k < 7; k++) {
       var day = new Date(now.getTime() - k * 864e5);
-      try {
-        var nd = await gql(Q_NEW, { date: ymd(day), first: 100, filter: { packages: OURS, monetizationTypes: SUBS } }, opts);
+      try { for (var pg = 0, aft = null; pg < 4; pg++) {   // busy days have 100+ arrivals: page through them
+        var nd = await gql(Q_NEW, { date: ymd(day), first: 100, after: aft, filter: { packages: OURS, monetizationTypes: SUBS } }, opts);
         nd.newTitles.edges.forEach(function (e) {
           var node = e.node || {}, isSeason = node.__typename === "Season", base = isSeason ? node.show : node, t = add(base);
           var app = FAMILY[e.newOffer && e.newOffer.package && e.newOffer.package.shortName];
@@ -210,8 +237,10 @@
           if (t.segs.indexOf("arr") < 0) t.segs.push("arr");
           arrivals.push({ id: t.id, app: app, season: sn, date: ymd(day) });
         });
-      } catch (err) { /* one bad day shouldn't sink the refresh */ }
+        var pi = nd.newTitles.pageInfo; if (!pi || !pi.hasNextPage) break; aft = pi.endCursor;
+      } } catch (err) { /* one bad day shouldn't sink the refresh */ }
     }
+    arrivals = rankArrivals(arrivals, titles, now);
     tick("New arrivals");
 
     // 3) coming soon — announced release dates on your apps

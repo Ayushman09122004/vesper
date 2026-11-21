@@ -34,6 +34,9 @@ vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, "core.js"), "utf8"), ctx);
 const file = path.join(root, "catalog.json");
 let prev = {}; try { prev = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+// backup mode (GitHub robot): the Mac already published a fresh catalog today → nothing to do
+const fresh = +process.env.SKIP_IF_FRESH_HOURS;
+if (fresh && prev.generated && Date.now() - Date.parse(prev.generated) < fresh * 3600e3) { console.log("catalog is fresh (" + prev.generated + ") — skipping"); process.exit(0); }
 let last = -1;
 const next = await ctx.VesperCore.build({ prev, onProgress: (p, l) => { const pc = Math.round(p * 100); if (pc >= last + 5) { last = pc; console.log(pc + "% " + l); } } });
 if (!next.titles || next.titles.length < 500) { console.error("catalog too small:", (next.titles || []).length); process.exit(1); }

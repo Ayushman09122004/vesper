@@ -1,20 +1,31 @@
 name: Refresh catalog
 on:
   schedule:
-    - cron: "30 0 * * *"   # every day at 06:00 India time
+    - cron: "30 4 * * *"   # 10:00 India time — backup: the Mac publishes first (tools/mac-daily.sh); this only builds if that didn't happen
   workflow_dispatch: {}
 permissions:
   contents: write
+  issues: write
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - run: node tools/build-catalog.mjs
+          node-version: 22
+      - name: Build catalog
+        id: build
+        continue-on-error: true
+        run: SKIP_IF_FRESH_HOURS=20 node tools/build-catalog.mjs
+      # JustWatch sometimes rate-limits GitHub's machines for a while: wait it out and try once more
+      - name: Build catalog (second try)
+        if: steps.build.outcome == 'failure'
+        run: |
+          git checkout -- catalog.json || true
+          sleep 900
+          SKIP_IF_FRESH_HOURS=20 node tools/build-catalog.mjs
       - run: node tools/trailers.mjs 600
         continue-on-error: true
       - name: Save new catalog
@@ -24,4 +35,23 @@ jobs:
           git add catalog.json trailers.json
           git diff --cached --quiet && echo "no change" && exit 0
           git commit -m "Daily catalog $(date -u +%F)"
+          git pull --rebase -q origin main || true
           git push
+      # anything above failed twice: open (or bump) an issue so GitHub emails you — no silent stale catalog
+      - name: Tell the owner
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          n=$(gh issue list --state open --label robot-failed --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$n" ]; then gh issue comment "$n" --body "Failed again on $(date -u +%F): $url"
+          else gh label create robot-failed --color d73a4a --force >/dev/null 2>&1 || true
+               gh issue create --label robot-failed --title "Vesper catalog robot failed ($(date -u +%F))" --body "The daily catalog didn't update, so Vesper's apps are showing an older catalog. Run log: $url"; fi
+      - name: All good again — close the alert
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --state open --label robot-failed --json number --jq '.[].number' 2>/dev/null); do
+            gh issue close "$n" --comment "Catalog updated fine on $(date -u +%F)."; done
