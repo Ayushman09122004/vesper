@@ -124,10 +124,12 @@
     ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
     ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
     ".fsbar .fsmx{font-size:17px;padding:0;width:36px}" +
-    ".fsmaxx{display:none;position:absolute;top:10px;left:10px;z-index:6;width:36px;height:36px;border-radius:99px;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:15px;opacity:.55}" +
+    ".fsmaxx{display:none;position:absolute;top:8px;left:50%;margin-left:-18px;z-index:6;width:36px;height:36px;border-radius:99px;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:15px;opacity:.55}" +
     ".fsp.max .fsbar,.fsp.max .fsdock{display:none}.fsp.max .fsmaxx{display:block}.fsp.mxhint .fsmaxx{opacity:1}" +
-    ".fsp.max .fsv{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;aspect-ratio:auto;z-index:5;background:#000;flex:none}" +
-    ".fsp.max.rot .fsv{width:100vh;width:100dvh;height:100vw;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg)}" +
+    ".fsp.max{background:#000}" +
+    ".fsp.max .fsv{position:fixed;left:env(safe-area-inset-left);top:0;width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));height:100vh;height:100dvh;aspect-ratio:auto;z-index:5;background:#000;flex:none}" +
+    // turned sideways: keep clear of the notch (phone's top) and the home bar (phone's bottom)
+    ".fsp.max.rot .fsv{width:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));height:100vw;left:50%;top:calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);transform:translate(-50%,-50%) rotate(90deg)}" +
     ".fsv.kk{overflow:hidden;background:#000}.fsv.kk iframe{inset:auto;position:absolute}" +
     "html.desk .fsp:not(.max) .fsv.kk{height:auto;aspect-ratio:16/9;align-self:flex-start}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
