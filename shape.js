@@ -19,10 +19,43 @@
 
   V.load = function (cat) {
     V.CAT = cat; V.T = {};
-    V.ALL = (cat.titles || []).filter(function (t) { return t.backdrop; });
+    V.ALL = (cat.titles || []).filter(function (t) { return t.backdrop || t.poster; });
     V.ALL.forEach(function (t) { V.T[t.id] = t; });
     NAMES = null;
   };
+  // the rest of what's on your apps (catalog-more.json: a compact index), merged in when it arrives — search and sections
+  // then see everything. Details (description, cast, play links) live in 16 small shards, fetched when a title is opened.
+  V.addMore = function (m) {
+    var n = 0, list = m && m.titles;
+    if (m && m.v === 2) { var F = m.f, ix = {}; F.forEach(function (k, i) { ix[k] = i; });
+      list = m.r.map(function (r) { var t = { _lite: 1, _sh: 0 }, v;
+        for (var i = 0; i < F.length; i++) { v = r[i]; if (v === 0 || v === "" || v == null) continue; t[F[i]] = v; }
+        t.type = r[ix.type] === "S" ? "SHOW" : "MOVIE";
+        ["genres", "countries", "avail"].forEach(function (k) { t[k] = t[k] ? String(t[k]).split(",") : []; });
+        if (t.po) t.poster = "/poster/" + t.po + "/{profile}/p.webp"; if (t.bd) t.backdrop = "/backdrop/" + t.bd + "/{profile}/b.webp"; delete t.po; delete t.bd;
+        t.cast = []; t.dirs = []; t.desc = ""; return t; });
+      MORE = { shards: m.shards || 16, got: {}, wait: {} };
+    }
+    (list || []).forEach(function (t) { if (!t || V.T[t.id] || !(t.backdrop || t.poster)) return; V.T[t.id] = t; V.ALL.push(t); n++; });
+    if (n) { NAMES = null; V.CAT.titles = V.ALL; }
+    return n;
+  };
+  var MORE = null;
+  function shardOf(id) { var h = 0; for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return h % MORE.shards; }
+  function getShard(k, cb) {
+    if (MORE.got[k]) return cb(MORE.got[k]);
+    if (MORE.wait[k]) return MORE.wait[k].push(cb); MORE.wait[k] = [cb];
+    fetch("catalog-more/d" + (k < 10 ? "0" : "") + k + ".json?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) { MORE.got[k] = j.d || {}; }).catch(function () { MORE.got[k] = null; })
+      .then(function () { var w = MORE.wait[k]; delete MORE.wait[k]; var d = MORE.got[k] || {}; if (!MORE.got[k]) delete MORE.got[k]; w.forEach(function (f) { f(d); }); });
+  }
+  // fill in a lightweight title's details (cb runs at once if it has them)
+  V.full = function (t, cb) {
+    if (!t || !t._lite || !MORE) return cb && cb(t);
+    getShard(shardOf(t.id), function (d) { var x = d[t.id]; if (x) { Object.assign(t, x); delete t._lite; t._hay = null; } if (cb) cb(t); });
+  };
+  // fetch ahead for titles likely to be tapped (search results), so Play/title pages are instant
+  V.prefetchFull = function (list) { if (!MORE) return; var seen = {}; (list || []).slice(0, 16).forEach(function (t) { if (t && t._lite) { var k = shardOf(t.id); if (!seen[k]) { seen[k] = 1; getShard(k, function () { (list || []).forEach(function (u) { if (u && u._lite && shardOf(u.id) === k) V.full(u); }); }); } } }); };
   // personal things live per profile ("mylist@p2"); settings like weather and favourite service are shared
   var PERSONAL = { mylist: 1, watched: 1, recent: 1, queries: 1, likes: 1, dislikes: 1, viewed: 1, shown: 1, trios: 1, lastHero: 1, regions: 1 };
   V.key = function (k) { return PERSONAL[k] && V.state.profile ? k + "@" + V.state.profile : k; };
@@ -31,7 +64,7 @@
   V.pref = function (k, d) { var p = V.state.prefs || {}; return p[k] != null ? p[k] : d; };
 
   // ---------- images, apps, play links ----------
-  V.bd = function (t, size) { return t && t.backdrop ? IMG + t.backdrop.replace("{profile}", size || "s1440") : null; };
+  V.bd = function (t, size) { return t && t.backdrop ? IMG + t.backdrop.replace("{profile}", size || "s1440") : t && t.poster ? IMG + t.poster.replace("{profile}", "s718") : null; };
   V.po = function (t, size) { return t && t.poster ? IMG + t.poster.replace("{profile}", size || "s592") : null; };
   V.pickApp = function (t) {
     var a = t.avail || [], fav = V.pref("app", "auto");

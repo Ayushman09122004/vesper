@@ -255,7 +255,7 @@
   }
   function cancel() { tok++; btok++; wtok++; }
 
-  window.VSB = { on: function () { return ON; }, toggle: toggle, searchInto: searchInto, prep: prep, play: play, browse: browse, works: works, cancel: cancel, T: T,
+  window.VSB = { reindex: function () { IDX = null; }, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, prep: prep, play: play, browse: browse, works: works, cancel: cancel, T: T,
     cached: function () { var out = [], seen = {}; Object.keys(SQC).forEach(function (k) { (SQC[k] || []).forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); });
       ((C.home && C.home.rows) || []).concat((C.more && C.more.lists) || []).forEach(function (r) { r.items.forEach(function (c) { if (!seen[c.url]) { seen[c.url] = 1; out.push(c); } }); }); return out; },
     label: function (t) { return t && t.site ? '<span class="sbl">ShowBox</span>' : ""; } };

@@ -653,6 +653,7 @@
     drawFilt(); row1.appendChild(seg); page.appendChild(row1); page.appendChild(filt);
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
     if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); row1.appendChild(sbt); }
+    if (window.VNW) { var nwt = VNW.toggle(function () { run(); }); filt.parentNode ? page.insertBefore(h("div", "nfwrow"), filt).appendChild(nwt) : row1.appendChild(nwt); }
     chips.style.margin = "0 0 14px"; page.appendChild(chips); page.appendChild(body);
     inp.value = arg || "";
     var t = null, rawOnly = false, stok = 0, PICK = null, whoT = null;
@@ -794,7 +795,9 @@
         var ti = bn.titles.filter(function (x) { var k = S.norm(x.title); return k === nq || k.indexOf(nq) === 0; })[0]; if (ti) { R.top = ti; R.titles = bn.titles.filter(function (x) { return x !== ti; }); R.similar = S.similar(ti, 20).filter(function (x) { return (x.avail || []).length; }); } }
       else R = smartSearch(useQ);
       R = onlyType(R, ty);
+      S.prefetchFull([R.top].concat(R.titles || []));
       var P = parseQuery(useQ); P.type = ty;
+      if (window.VNW && (MODE === "all" || MODE === "title")) VNW.searchInto(body, useQ, R);
       if (window.VSB && VSB.on()) {
         VSB.searchInto(body, useQ, R, rowEl, { type: ty });
         if (P.structured && !P.who) { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
@@ -1326,7 +1329,8 @@
   var curT = null;
   var fromRect = null;
   function openDetail(id) {
-    var t = S.T[id]; if (!t) return; if (window.VDESK) { bbStop(document); if (window.VHOV) VHOV.hide(true); } curT = t; S.markViewed(t.id); buzz();
+    var t = S.T[id]; if (!t) return;
+    if (t._lite) return S.full(t, function () { openDetail(id); });   // one of the extras: its details first (one small file) if (window.VDESK) { bbStop(document); if (window.VHOV) VHOV.hide(true); } curT = t; S.markViewed(t.id); buzz();
     var d = $("detail"), apps = t.avail || [], best = S.pickApp(t), soon = S.soonOf(t), rank = rankOf(t), arr = S.arrivalOf(t);
     var others = apps.filter(function (a) { return a !== best; }), inL = S.inList("mylist", t.id);
     var meta = [t.year ? "<span>" + t.year + "</span>" : "", t.cert ? '<span class="box">' + esc(t.cert) + "</span>" : "", "<span>" + esc(S.length(t)) + "</span>", '<span class="box">HD</span>', t.imdb ? '<span class="imdb">IMDb ' + t.imdb.toFixed(1) + "</span>" : ""].filter(Boolean).join("");
@@ -1539,7 +1543,7 @@
     if (!el) return;
     var D = el.dataset;
     var inSheet = !!el.closest("#sheet");
-    if (D.play) { e.stopPropagation(); if (inSheet) closeSheet(); return playTitle(D.play, D.app); }
+    if (D.play) { e.stopPropagation(); if (inSheet) closeSheet(); if (S.T[D.play] && S.T[D.play]._lite) return openDetail(D.play); return playTitle(D.play, D.app); }
     if (D.trailer) { e.stopPropagation(); if (inSheet) closeSheet(); return openTrailer(S.T[D.trailer]); }
     if (D.tclose != null) return closeTrailer();
     if (D.yt) { closeTrailer(); return window.vesperOpen("youtube", "https://www.youtube.com/watch?v=" + D.yt); }
@@ -1694,7 +1698,18 @@
     var c = h("div", "coach", '<img src="icons/icon-180.png"><div><b>Put Vesper on your Home Screen</b>Tap <span class="sh">' + G.share + '</span> below, then <b>Add to Home Screen</b>.</div><button>' + G.x + "</button>");
     document.body.appendChild(c); c.querySelector("button").onclick = function () { c.remove(); };
   }, 1500);
-  fetchCatalog().then(start).catch(function (e) {
+  // everything else on your apps, after the first screen: search and sections can then find any title
+  function loadMore(cat) {
+    if (!cat || !cat.more) return;
+    setTimeout(function () {
+      fetch((cat.more.file || "catalog-more.json") + "?d=" + new Date().toISOString().slice(0, 13)).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (m) {
+        var n = S.addMore(m); TOPSET = null;
+        if (window.VSB && VSB.reindex) VSB.reindex();
+        if (n && tab === "search" && !$("detail").classList.contains("on")) show(tab, sec, arg);   // a search on screen now sees them
+      }).catch(function () {});
+    }, 900);
+  }
+  fetchCatalog().then(function (cat) { start(cat); loadMore(cat); }).catch(function (e) {
     if (e && e.stack) { console.error(e); try { localStorage.setItem("vesper.lastError", String(e.stack).slice(0, 500)); } catch (x) {} }
     $("boot").innerHTML = '<div class="empty"><b>Can\'t reach Vesper</b>Check your connection and open it again.</div>';
   });
@@ -1721,7 +1736,7 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) { hiddenAt = Date.now(); return; }
     setTimeout(checkIn, 700);
-    if (hiddenAt && Date.now() - hiddenAt > 4 * 3600e3) fetchCatalog().then(function (cat) { S.load(cat); TOPSET = null; noted = false; if (!$("detail").classList.contains("on")) show(tab, sec, arg); }).catch(function () {});
+    if (hiddenAt && Date.now() - hiddenAt > 4 * 3600e3) fetchCatalog().then(function (cat) { S.load(cat); loadMore(cat); TOPSET = null; noted = false; if (!$("detail").classList.contains("on")) show(tab, sec, arg); }).catch(function () {});
   });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (r) { r.update().catch(function () {}); }).catch(function () {});
 })();

@@ -190,7 +190,7 @@
   async function build(opts) {
     opts = opts || {};
     var now = new Date(), year = now.getFullYear(), titles = {}, segs = {}, SEGS = segments(year), segFail = 0;
-    var steps = SEGS.length + 10, done = 0;
+    var steps = SEGS.length + 11, done = 0;
     function tick(label) { done++; if (opts.onProgress) opts.onProgress(Math.min(1, done / steps), label); }
     function add(n, allowEmpty) { if (!n) return null; if (titles[n.id]) return titles[n.id]; var t = mapNode(n, allowEmpty); if (t) titles[n.id] = t; return t; }
 
@@ -212,6 +212,38 @@
       segs[S[0]] = { label: S[1], ids: ids };
       tick(S[1]);
     }
+
+    // 1a) EVERYTHING on your apps, not just what the lists above pick: JustWatch stops paging at ~2,000 per list, so
+    //     films and series are split into release-year slices small enough (counted first, split until they fit),
+    //     then fetched 2 pages (200 titles) per request (JustWatch caps request complexity). ~18k titles in ~90 requests.
+    function lit(v) { if (Array.isArray(v)) return "[" + v.map(lit).join(",") + "]";
+      if (v && typeof v === "object") return "{" + Object.keys(v).map(function (k) { return k + ":" + lit(v[k]); }).join(",") + "}";
+      return typeof v === "string" ? (/^[A-Z_]+$/.test(v) ? v : JSON.stringify(v)) : String(v); }
+    function b64(str) { var A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", o = "", i = 0;
+      while (i < str.length) { var a = str.charCodeAt(i++), b = str.charCodeAt(i++), c = str.charCodeAt(i++), n = (a << 16) | ((b || 0) << 8) | (c || 0);
+        o += A[(n >> 18) & 63] + A[(n >> 12) & 63] + (isNaN(b) ? "=" : A[(n >> 6) & 63]) + (isNaN(c) ? "=" : A[n & 63]); } return o; }
+    function sliceF(s) { return { objectTypes: [s[0]], releaseYear: { min: s[1], max: s[2] }, packages: OURS, monetizationTypes: SUBS }; }
+    try {
+      var queue = [["MOVIE", 1900, year + 1], ["SHOW", 1900, year + 1]], fit = [];
+      while (queue.length) {
+        var cb = queue.splice(0, 20);
+        var dc = await gql("{" + cb.map(function (sl, i) { return "c" + i + ":popularTitles(country:IN,first:1,filter:" + lit(sliceF(sl)) + "){totalCount}"; }).join(" ") + "}", {}, opts);
+        cb.forEach(function (sl, i) { var n = dc["c" + i].totalCount;
+          if (n <= 1900 || sl[1] === sl[2]) { if (n) fit.push([sl, n]); }
+          else { var mid = Math.floor((sl[1] + sl[2]) / 2); queue.push([sl[0], sl[1], mid], [sl[0], mid + 1, sl[2]]); } });
+      }
+      var pages = []; fit.forEach(function (f) { for (var off = 0; off < Math.min(f[1], 2000); off += 100) pages.push([f[0], off]); });
+      for (var pg0 = 0; pg0 < pages.length; pg0 += 2) {   // 2 pages: JustWatch caps a request's "complexity" (8 pages of full details is 3x over)
+        var grp = pages.slice(pg0, pg0 + 2);
+        try {
+          var dp = await gql("{" + grp.map(function (g, i) { return "p" + i + ":popularTitles(country:IN,first:100" + (g[1] ? ",after:" + JSON.stringify(b64(String(g[1]))) : "") +
+            ",sortBy:POPULAR,filter:" + lit(sliceF(g[0])) + "){edges{node{ " + FIELDS + " }}}"; }).join(" ") + "}", {}, opts);
+          grp.forEach(function (g, i) { ((dp["p" + i] || {}).edges || []).forEach(function (e) { var t = add(e.node); if (t && !t.segs.length) t.segs.push("all"); }); });
+        } catch (err) { typeof console !== "undefined" && console.log("  everything: a page group failed — " + err.message); }
+      }
+      if (typeof console !== "undefined") console.log("  everything: " + fit.length + " slices, " + pages.length + " pages, catalog now " + Object.keys(titles).length + " titles");
+    } catch (err) { typeof console !== "undefined" && console.log("  everything: counting failed — " + err.message); }
+    tick("Everything on your apps");
 
     // 1b) explore: every day a different set of corners (genre × country × era × films/series), so new titles keep arriving
     var dayN = Math.floor(now.getTime() / 864e5), EX = explore(dayN, year);
@@ -304,8 +336,8 @@
     carry.forEach(function (t) { if (!gone[t.id]) titles[t.id] = t; });
     tick("Keeping " + carry.length);
     var list = Object.keys(titles).map(function (id) { return titles[id]; }).filter(function (t) { return t.segs.length; });
-    // keep it a sensible size for TVs and phones: when it grows past the cap, the weakest older titles step out
-    var CAP = 12000;
+    // everything on your apps is kept (the web app loads the extras separately); the cap only guards against runaway growth
+    var CAP = 40000;
     if (list.length > CAP) {
       list.forEach(function (t) { t._k = (t.segs[0] !== "keep" ? 100 : 0) + (t.imdb || 6) + Math.log(1 + (t.votes || 0)) / 2 + Math.min(4, Math.log(1 + (t.pop || 0))) + (t.added === today ? 50 : 0); });
       list.sort(function (a, b) { return b._k - a._k; }); list = list.slice(0, CAP); list.forEach(function (t) { delete t._k; });
