@@ -158,7 +158,7 @@
      prev: the previous catalog (keeps Originals flags so only new titles need checking) */
   async function build(opts) {
     opts = opts || {};
-    var now = new Date(), year = now.getFullYear(), titles = {}, segs = {}, SEGS = segments(year);
+    var now = new Date(), year = now.getFullYear(), titles = {}, segs = {}, SEGS = segments(year), segFail = 0;
     var steps = SEGS.length + 10, done = 0;
     function tick(label) { done++; if (opts.onProgress) opts.onProgress(Math.min(1, done / steps), label); }
     function add(n, allowEmpty) { if (!n) return null; if (titles[n.id]) return titles[n.id]; var t = mapNode(n, allowEmpty); if (t) titles[n.id] = t; return t; }
@@ -166,10 +166,15 @@
     // 1) the sections
     for (var s = 0; s < SEGS.length; s++) {
       var S = SEGS[s], filter = Object.assign({ packages: OURS, monetizationTypes: SUBS }, S[2]), after = null, nodes = [];
-      while (nodes.length < S[3]) {
-        var d = await gql(Q_SEG, { first: Math.min(100, S[3] - nodes.length), after: after, filter: filter, sortBy: S[4] }, opts);
-        var pt = d.popularTitles; nodes = nodes.concat(pt.edges.map(function (e) { return e.node; }));
-        if (!pt.pageInfo.hasNextPage) break; after = pt.pageInfo.endCursor;
+      try {
+        while (nodes.length < S[3]) {
+          var d = await gql(Q_SEG, { first: Math.min(100, S[3] - nodes.length), after: after, filter: filter, sortBy: S[4] }, opts);
+          var pt = d.popularTitles; nodes = nodes.concat(pt.edges.map(function (e) { return e.node; }));
+          if (!pt.pageInfo.hasNextPage) break; after = pt.pageInfo.endCursor;
+        }
+      } catch (err) {
+        // this section failed today (rate limit / outage): keep what we got, or yesterday's list for it
+        if (!nodes.length) { var ps = opts.prev && opts.prev.segs && opts.prev.segs[S[0]]; if (ps) { segs[S[0]] = ps; segFail = (segFail || 0) + 1; tick(S[1]); continue; } }
       }
       var ids = [];
       nodes.forEach(function (n) { var t = add(n); if (t && decent(t, S[5]) && ids.indexOf(t.id) < 0) { ids.push(t.id); t.segs.push(S[0]); } });
