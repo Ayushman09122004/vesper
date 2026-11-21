@@ -7,7 +7,7 @@
 # retries, so two publishers can never drop each other's files.
 set -euo pipefail
 NEW="${1:-}"
-DATA=(catalog.json catalog-more.json catalog-more netflix-world.json trailers.json)
+DATA=(catalog.json catalog-more.json catalog-more netflix-world.json trailers.json kisskh)
 # (identity is set only on the snapshot commit below, never on the caller's checkout)
 for try in 1 2 3 4 5; do
   rm -rf _site && mkdir _site

@@ -1,0 +1,35 @@
+# KissKH index for Vesper's "KissKH" server: every KissKH title + its episode ids (the phone can't read KissKH's API).
+# Incremental: reuses the live kisskh/ files and only asks KissKH about new or changed titles, one at a time.
+# The very first run takes a few hours (13k titles); after that a run takes a minute or two.
+name: KissKH index
+on:
+  schedule:
+    - cron: "30 0 * * *"     # 06:00 India
+    - cron: "30 12 * * *"    # 18:00 India
+  push:
+    branches: [main]
+    paths: [tools/kisskh.mjs, .github/workflows/kisskh.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: kisskh
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+      - name: Yesterday's index (from the live site)
+        run: |
+          git fetch -q origin gh-pages 2>/dev/null || exit 0
+          git cat-file -e FETCH_HEAD:kisskh 2>/dev/null && { rm -rf kisskh; git archive FETCH_HEAD kisskh | tar -x; }; true
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Build
+        run: node tools/kisskh.mjs kisskh 320
+      - name: Publish
+        run: |
+          mkdir -p .new && cp -R kisskh .new/kisskh
+          bash tools/deploy-site.sh .new
