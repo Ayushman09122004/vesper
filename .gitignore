@@ -1,2 +1,9 @@
 .DS_Store
 jwcache/
+
+# daily data lives on the gh-pages snapshot (tools/deploy-site.sh), never in main's history
+catalog.json
+catalog-more.json
+catalog-more/
+netflix-world.json
+trailers.json
