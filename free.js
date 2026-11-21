@@ -122,9 +122,6 @@
     ".fsrv button.bad{opacity:.45}.fsrv button.ok small{color:#7be0a8}" +
     ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
     ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
-    ".gpi{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#ff4f7a,#ff9a5a);color:#fff;font:900 9.5px -apple-system,system-ui,sans-serif;margin-right:8px;flex:none}" +
-    ".btn.gp{display:flex;align-items:center;justify-content:center;text-decoration:none;color:#fff;background:rgba(255,255,255,.1)}" +
-    ".fsgp{display:flex;align-items:center;justify-content:center;width:100%;height:42px;border-radius:12px;background:rgba(255,255,255,.07);color:#fff;text-decoration:none;font:600 14px -apple-system,system-ui,sans-serif;margin-bottom:8px}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
     ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
     ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
@@ -194,7 +191,6 @@
       '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
       (NOADS && !(P && P.allowAds) ? '<p class="fsnote" style="margin-top:-2px">Vesper only tries these when no ad-free server has the title. You can still tap one.</p>' : "") +
       '<div class="fsrv fsrvad">' + ads.map(cell).join("") + "</div>" +
-      '<a class="fsgp" href="' + esc(gpUrl(P.t)) + '" target="_blank" rel="noopener"><span class="gpi">GP</span>Search “' + esc(P.t.title) + '” on GoPlay ↗</a>' +
       '<button class="fsnx" data-fsnexts style="width:100%;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer">Not playing? Try the next server</button>' +
       '<p class="fsnote">Free players from other sites. If one shows nothing, Vesper moves to the next by itself — tap the picture or Stay to keep one. 🔒 servers run locked, so their pop-up and redirect ads can’t open. Ads drawn inside a player’s own picture can’t be removed from outside it.</p>';
     d.innerHTML = html; mark();
@@ -311,15 +307,10 @@
     return true;
   }
 
-  // ---------- GoPlay: opens GoPlay's own search for the exact title (its pages can't be looked up from a phone) ----------
-  var ASIA = { KR: 1, JP: 1, CN: 1, TW: 1, HK: 1, TH: 1, PH: 1, VN: 1, ID: 1, MY: 1, SG: 1 };
-  function gpUrl(t) { return "https://goplay.su/?search=" + encodeURIComponent(String(t.title || "").replace(/\s*\(.*?\)\s*/g, " ").trim()); }
-  function gpFits(t) { return !!t && (t.countries || []).some(function (c) { return ASIA[c]; }); }
-  function gpBtn(t) { return '<a class="btn wide gp" href="' + esc(gpUrl(t)) + '" target="_blank" rel="noopener"><span class="gpi">GP</span>Open on GoPlay</a>'; }
   // ---------- title page / hover button ----------
   function btn(t, big) {
     if (!can(t)) return "";
-    return '<button class="btn ' + (big ? "play big free" : "wide free") + '" data-free="' + esc(t.id) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Watch free</button>' + (gpFits(t) ? gpBtn(t) : "");
+    return '<button class="btn ' + (big ? "play big free" : "wide free") + '" data-free="' + esc(t.id) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Watch free</button>';
   }
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-free]"); if (!b) return;
@@ -401,7 +392,7 @@
     return c ? c.m : [];
   }
   // blend the row's lists, lean to newer titles on "fresh" rows, then shake the order a little so every visit looks different
-  function build(rc, seen, hid, rnd) {
+  function buildRow(rc, seen, hid, rnd) {
     var ls = rc.k.map(list), out = [], n = Math.max.apply(null, ls.map(function (l) { return l.length; }).concat([0]));
     for (var i = 0; i < n; i++) ls.forEach(function (l) { if (l[i]) out.push(l[i]); });
     var items = out.map(function (m, i) { var y = yr(m); return { m: m, s: i - (rc.fresh ? 0 : (y >= Y - 1 ? 6 : y >= Y - 3 ? 3 : 0)) + rnd() * 7 }; })
@@ -435,7 +426,7 @@
     if (!ON || !LISTS[id]) return rows;
     var hid = S.hiddenSet ? S.hiddenSet() : {}, seen = {}, rnd = seeded(LAUNCH * 131 + hash(id)), add = [];
     if (id === "shows" || id === "home") { var air = airing().filter(function (t) { return !hid[t.id]; }); if (air.length >= 6) add.push(S.R("Airing today", shuffle(air.slice(0, 12), rnd).concat(air.slice(12)), null, "new episodes · watch free", 1, true)); }
-    picks(id, LAUNCH).forEach(function (rc) { var items = build(rc, seen, hid, rnd); if (items.length >= 6) add.push(S.R(rc.t, items.slice(0, 30), null, "free servers", 1, true)); });
+    picks(id, LAUNCH).forEach(function (rc) { var items = buildRow(rc, seen, hid, rnd); if (items.length >= 6) add.push(S.R(rc.t, items.slice(0, 30), null, "free servers", 1, true)); });
     // core rows first, the rest shuffled; spread out: one free row every few of yours
     var first = add.slice(0, id === "anime" ? 1 : 2), rest = shuffle(add.slice(first.length), rnd), order0 = first.concat(rest);
     var at = id === "home" ? 3 : 2, gap = id === "home" ? 3 : 3;
