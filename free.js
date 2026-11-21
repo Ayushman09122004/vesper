@@ -324,6 +324,10 @@
   // ---------- autopilot: no picture from a server → move on to the next one until something plays ----------
   // Most players tell the page what they're doing (postMessage PLAYER_EVENT with currentTime/duration); a few say nothing.
   var W = null, autoT = null, tickT = null;
+  // iPhone/iPad: players wait for your tap (no autoplay with sound) and stay silent until then, and a tap inside the
+  // player isn't reliably reported — so silence there means nothing. Only a player's own error moves on by itself;
+  // otherwise Vesper just offers the next server. (Laptops keep the full autopilot.)
+  var TOUCH = !!(window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches);
   function banner(html) { var box = el.querySelector(".fsv"), b = box.querySelector(".fsauto"); if (!html) { if (b) b.remove(); return; }
     if (!b) { b = document.createElement("div"); b.className = "fsauto"; box.appendChild(b); } b.innerHTML = html; }
   function settle(ok) {   // this server works (ok) — stop the autopilot
@@ -349,6 +353,12 @@
     if (sv0.quiet) {   // these never tell us anything: stop here and let you press play
       W.done = 1; if (P.auto) banner('<span>' + esc(sv0.n) + ' — tap play in the picture.</span><button class="g" data-fsnexts>Next server</button>'); return; }
     var wait = sv0.k === "vidqueen" || sv0.k === "vidgold" || sv0.k === "vidmario" ? 20000 : 12000, my = W;
+    if (TOUCH) {
+      autoT = setTimeout(function () { if (W !== my || my.done) return;
+        banner('<span>Tap ▶ in the picture to start. Nothing there?</span><button class="g" data-fsgo>Next server</button>');
+        setTimeout(function () { if (W === my && !my.done) banner(null); }, 10000); }, wait + 8000);
+      return;
+    }
     autoT = setTimeout(function () { if (W !== my || my.done) return;
       var left = 6; my.tick = 1;
       function draw() { banner('<span>No picture from ' + esc(sv0.n) + " yet — next server in " + left + "s</span><button data-fsstay>Stay</button><button class=\"g\" data-fsgo>Next</button>"); }
@@ -420,12 +430,38 @@
     e.stopPropagation(); e.preventDefault(); play(S.T[b.dataset.free]);
   }, true);
 
-  // a free-only title whose poster doesn't exist anywhere: drop its card instead of showing an empty tile
+  // ---------- missing posters: TVmaze (series) → Wikipedia's poster (via Wikidata) → the backdrop → hide the card ----------
+  var PX = ld("px", {}), pxQ = [], pxT = null, pxWait = {};
+  function pxSave() { var ks = Object.keys(PX); if (ks.length > 1500) ks.slice(0, ks.length - 1500).forEach(function (k) { delete PX[k]; }); sv("px", PX); }
+  function altPoster(t) {
+    var id = t.imdb_id; if (!id) return Promise.resolve("");
+    if (PX[id] != null) return Promise.resolve(PX[id]);
+    var tv = t.type === "SHOW" ? get("https://api.tvmaze.com/lookup/shows?imdb=" + id, 8000).then(function (s) { return s && s.image ? s.image.medium || s.image.original : ""; }).catch(function () { return ""; }) : Promise.resolve("");
+    return tv.then(function (u) { if (u) { PX[id] = u; pxSave(); return u; }
+      return new Promise(function (ok) { (pxWait[id] = pxWait[id] || []).push(ok); if (pxQ.indexOf(id) < 0) pxQ.push(id); clearTimeout(pxT); pxT = setTimeout(pxRun, 350); }); });
+  }
+  function pxRun() {   // up to 40 titles in one Wikidata + one Wikipedia request
+    var ids = pxQ.splice(0, 40); if (!ids.length) return; if (pxQ.length) pxT = setTimeout(pxRun, 400);
+    function done(map) { ids.forEach(function (id) { PX[id] = map[id] || ""; (pxWait[id] || []).forEach(function (f) { f(PX[id]); }); delete pxWait[id]; }); pxSave(); }
+    var q = 'SELECT ?id ?a WHERE { VALUES ?id {' + ids.map(function (x) { return '"' + x + '"'; }).join(" ") + '} ?i wdt:P345 ?id . ?a schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> }';
+    get("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), 12000).then(function (j) {
+      var byTitle = {}; (j.results.bindings || []).forEach(function (b) { byTitle[decodeURIComponent(b.a.value.split("/wiki/")[1]).replace(/_/g, " ")] = b.id.value; });
+      var titles = Object.keys(byTitle); if (!titles.length) return done({});
+      return get("https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=thumbnail&pithumbsize=400&pilicense=any&redirects=1&format=json&origin=*&titles=" + encodeURIComponent(titles.join("|")), 12000).then(function (w) {
+        var map = {}, red = {}; ((w.query && w.query.normalized) || []).concat((w.query && w.query.redirects) || []).forEach(function (r) { red[r.to] = r.from; });
+        Object.keys((w.query && w.query.pages) || {}).forEach(function (k) { var p = w.query.pages[k], ti = p.title; while (!byTitle[ti] && red[ti]) ti = red[ti];
+          if (p.thumbnail && byTitle[ti]) map[byTitle[ti]] = p.thumbnail.source; });
+        done(map);
+      });
+    }).catch(function () { done({}); });
+  }
   document.addEventListener("error", function (e) {
     var im = e.target; if (!im || im.tagName !== "IMG" || !im.classList.contains("p")) return;
     var c = im.closest(".pc"), t = c && S.T[c.dataset.id]; if (!t || !t.fs || (t.avail || []).length || t.site) return;
     e.stopPropagation();   // ours to handle (the page's own handler would just drop the picture)
-    if (/metahub/.test(im.src) && t.backdrop && t.backdrop !== im.src && !im.dataset.fb2) { im.dataset.fb2 = 1; im.src = t.backdrop.replace("/background/medium/", "/background/small/"); return; }
+    if (!im.dataset.alt) { im.dataset.alt = 1;
+      altPoster(t).then(function (u) { if (u) { t.poster = u; im.src = u; } else if (t.backdrop && !/metahub/.test(t.backdrop)) im.src = t.backdrop; else c.style.display = "none"; });
+      return; }
     c.style.display = "none";
   }, true);
   // ---------- Search: "Free servers" switch + "On free servers" row ----------
