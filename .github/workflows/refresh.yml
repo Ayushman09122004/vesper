@@ -49,15 +49,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 1 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot2:
@@ -86,15 +88,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 2 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot3:
@@ -123,15 +127,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 3 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot4:
@@ -160,15 +166,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 4 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot5:
@@ -197,15 +205,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 5 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot6:
@@ -234,15 +244,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 6 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot7:
@@ -271,15 +283,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 7 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot8:
@@ -308,15 +322,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 8 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot9:
@@ -345,15 +361,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 9 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   bot10:
@@ -382,15 +400,17 @@ jobs:
         run: |
           set +e
           node tools/build-catalog.mjs; code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # words, not numbers: GitHub's conditions treat '' == '0' as true
+          case $code in 0) r=done;; 3) r=partial;; *) r=error;; esac
+          echo "result=$r" >> "$GITHUB_OUTPUT"
           [ "$code" = 1 ] && echo "::warning::bot 10 hit an error — the next bot carries on"
           exit 0
       - name: Hand progress on
-        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        if: steps.build.outputs.result == 'partial' || steps.build.outputs.result == 'error'
         uses: actions/upload-artifact@v4
         with: { name: progress, path: jwcache/, overwrite: true, retention-days: 1, if-no-files-found: warn }
       - name: Hand over the catalog
-        if: steps.build.outputs.code == '0'
+        if: steps.build.outputs.result == 'done'
         uses: actions/upload-artifact@v4
         with: { name: catalog, path: catalog.json, retention-days: 1 }
   publish:
@@ -408,9 +428,15 @@ jobs:
         id: ok
         if: steps.got.outcome == 'success'
         run: |
-          node -e 'const c=JSON.parse(require("fs").readFileSync(".done/catalog.json"));if(!(c.titles&&c.titles.length>=500))process.exit(1);console.log(c.titles.length,"titles,",c.generated)'
+          # must be a real catalog AND newer than the one already published (never re-publish an old file)
+          node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(".done/catalog.json"));let o={};try{o=JSON.parse(fs.readFileSync("catalog.json"))}catch(e){}
+            if(!(c.titles&&c.titles.length>=500)){console.log("too small");process.exit(1)}
+            if(o.generated&&Date.parse(c.generated)<=Date.parse(o.generated)){console.log("not newer than the published one",c.generated,"<=",o.generated);process.exit(2)}
+            console.log(c.titles.length,"titles,",c.generated)' || { [ $? = 2 ] && echo "nothing new to publish" && exit 0; exit 1; }
           cp .done/catalog.json catalog.json
+          echo "fresh=1" >> "$GITHUB_OUTPUT"
       - name: Publish the catalog
+        if: steps.ok.outputs.fresh == '1'
         run: |
           git config user.name "Vesper robot"
           git config user.email "actions@users.noreply.github.com"
@@ -431,7 +457,7 @@ jobs:
           git commit -m "Trailers $(date -u +%F)"
           for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done
       - name: No catalog today — tell the owner
-        if: steps.ok.outcome != 'success'
+        if: steps.ok.outputs.fresh != '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           # only alarm when the PUBLISHED catalog is really getting old (a later run today may still make it)
@@ -445,7 +471,7 @@ jobs:
                gh issue create --label robot-failed --title "Vesper catalog is ${age}h old" --body "The bots couldn't build today's catalog. Run log: $url"; fi
           exit 1
       - name: All good — close any alert
-        if: steps.ok.outcome == 'success'
+        if: steps.ok.outputs.fresh == '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           for n in $(gh issue list --state open --label robot-failed --json number --jq '.[].number' 2>/dev/null); do
