@@ -412,6 +412,14 @@
     e.stopPropagation(); e.preventDefault(); play(S.T[b.dataset.free]);
   }, true);
 
+  // a free-only title whose poster doesn't exist anywhere: drop its card instead of showing an empty tile
+  document.addEventListener("error", function (e) {
+    var im = e.target; if (!im || im.tagName !== "IMG" || !im.classList.contains("p")) return;
+    var c = im.closest(".pc"), t = c && S.T[c.dataset.id]; if (!t || !t.fs || (t.avail || []).length || t.site) return;
+    e.stopPropagation();   // ours to handle (the page's own handler would just drop the picture)
+    if (/metahub/.test(im.src) && t.backdrop && t.backdrop !== im.src && !im.dataset.fb2) { im.dataset.fb2 = 1; im.src = t.backdrop.replace("/background/medium/", "/background/small/"); return; }
+    c.style.display = "none";
+  }, true);
   // ---------- Search: "Free servers" switch + "On free servers" row ----------
   var tok = 0, SQ = {};
   function search(q, cb) {
@@ -419,8 +427,10 @@
     Promise.all(["movie", "series"].map(function (ty) { return get(CM + "/catalog/" + ty + "/top/search=" + encodeURIComponent(q) + ".json").then(function (j) { return j.metas || []; }).catch(function () { return []; }); }))
       .then(function (r) {
         var all = r[0].map(function (m) { m.type = "movie"; return m; }).concat(r[1].map(function (m) { m.type = "series"; return m; }));
-        function score(m, i) { var k = norm(m.name); return (k === qn ? 100 : k.indexOf(qn) === 0 ? 50 : (" " + k).indexOf(" " + qn) >= 0 ? 25 : 0) - (i % 100) * 0.3; }
-        var withI = all.map(function (m, i) { return { m: m, s: score(m, m.type === "movie" ? i : i - r[0].length) }; });
+        // Cinemeta's own order is by popularity — keep it, nudge by how well the name matches, and lift what's on your apps
+        function score(m, i) { var k = norm(m.name), cat = index()[m.id];
+          return (k === qn ? 12 : k.indexOf(qn) === 0 ? 9 : (" " + k).indexOf(" " + qn) >= 0 ? 5 : 0) + (cat && (cat.avail || []).length ? 25 : 0) - i * 4; }
+        var withI = all.map(function (m) { var i = m.type === "movie" ? r[0].indexOf(m) : r[1].indexOf(m); return { m: m, s: score(m, i) }; });
         withI.sort(function (a, b) { return b.s - a.s; });
         SQ[qn] = withI.map(function (x) { return x.m; }); cb(SQ[qn]);
       });
