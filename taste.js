@@ -143,7 +143,7 @@
   // ---------- fresh every launch ----------
   // ranked rows (Top 10, Coming Soon) and your own rows stay put; everything else is reshuffled, titles you were shown
   // last time step back, and two "guest" titles join each row
-  var FIXED = /^(Top 10|Coming Soon|Continue in Your Apps|My List|Tonight's Three|New on Your Apps|New Seasons|Watched|Not for Me)/;
+  var FIXED = /^(New K-Drama Series$|New Korean Movies$|New This Week from Korea$|Coming Soon from Korea$|Western Animation$|Top 10|Coming Soon|Continue in Your Apps|My List|Tonight's Three|New on Your Apps|New Seasons|Watched|Not for Me)/;
   var SHOWN_LAST = null;
   function shownLast() { if (!SHOWN_LAST) SHOWN_LAST = setOf(["shown"]); return SHOWN_LAST; }
   function guestPool() {

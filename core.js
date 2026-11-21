@@ -44,6 +44,10 @@
       ["gb_s", "British Series", { objectTypes: ["SHOW"], productionCountries: ["GB"] }, 150, "POPULAR", 1500],
       ["kr_s", "K-Dramas", { objectTypes: ["SHOW"], productionCountries: ["KR"] }, 450, "POPULAR", 300],
       ["kr_m", "Korean Films", { objectTypes: ["MOVIE"], productionCountries: ["KR"] }, 140, "POPULAR", 1500],
+      // brand-new Korean releases (this year and last), let in before they have ratings — the K-Drama page's top rows
+      ["kr_new_s", "New K-Dramas", { objectTypes: ["SHOW"], productionCountries: ["KR"], releaseYear: { min: year - 1 } }, 200, "POPULAR", 0],
+      ["kr_new_m", "New Korean Films", { objectTypes: ["MOVIE"], productionCountries: ["KR"], releaseYear: { min: year - 1 } }, 100, "POPULAR", 0],
+      ["ani_cn", "Chinese Animation", { genres: ["ani"], productionCountries: ["CN"] }, 100, "POPULAR", 200],
       ["ani_s", "Anime Series", { objectTypes: ["SHOW"], genres: ["ani"], productionCountries: ["JP"] }, 450, "POPULAR", 500],
       ["ani_m", "Anime Films", { objectTypes: ["MOVIE"], genres: ["ani"], productionCountries: ["JP"] }, 90, "POPULAR", 1500],
       ["in_m", "Indian Films", { objectTypes: ["MOVIE"], productionCountries: ["IN"] }, 700, "POPULAR", 400],
@@ -142,7 +146,7 @@
       runtime: c.runtime || null, cert: c.ageCertification || null, seasons: n.totalSeasonCount || null, eps: eps || null,
       otitle: c.originalTitle && c.originalTitle !== c.title ? c.originalTitle : undefined, cast: cast, dirs: dirs, imdb_id: (c.externalIds || {}).imdbId || null, poster: path(c.posterUrl), backdrop: b, avail: avail, links: links, segs: [] };
   }
-  function decent(t, minVotes) { return (t.votes >= minVotes && (t.imdb || 0) >= 5.5) || (t.rank && t.rank <= 300); }
+  function decent(t, minVotes) { if (minVotes === 0) return true; return (t.votes >= minVotes && (t.imdb || 0) >= 5.5) || (t.rank && t.rank <= 300); }
   function ymd(d) { return d.toISOString().slice(0, 10); }
 
   async function gql(query, variables, opts) {

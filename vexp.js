@@ -9,6 +9,7 @@
     R: S.R,
     hidden: S.hiddenSet,
     primary: S._ && S._.primary,
+    isAnime: S.isAnime,
     // only the "fits your taste" part (genres + countries you lean to), about −1…+1.5
     tasteScore: function (t) { var T = taste(); if (T.n < 6) return 0; var mg = maxPos(T.g), mc = maxPos(T.c), gs = 0;
       (t.genres || []).forEach(function (x) { var w = T.g[x] || 0; gs += w > 0 ? Math.min(1, w / mg) : Math.max(-1, w / mg); });

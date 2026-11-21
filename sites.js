@@ -57,6 +57,7 @@
   var SKIP = /^(mylist|search|settings|together|time)$/;
   function mix(id, rows) {
     if (SKIP.test(id) || !rows || rows.length < 2) return rows;
+    if (id === "korean") newKorean(rows);
     var pool = all(/movie/.test(id) ? "MOVIE" : /show|series/.test(id) ? "SHOW" : null);
     if (id === "home") { if (pool.length >= 6) rows.splice(Math.min(4, rows.length), 0, S.R("New on ShowBox", pool, null, "tap Play with FebBox", 1, true)); return rows; }
     var gc = {}, cc = {}, ty = { M: 0, S: 0 }, n = 0;
@@ -71,8 +72,28 @@
         return !top.length || (t.genres || []).some(function (g) { return top.indexOf(g) >= 0; }); })
       .sort(function (a, b) { function s(t) { return (t.imdb || 6) + (t.genres || []).filter(function (g) { return top.indexOf(g) >= 0; }).length * 0.6 - (t.sb ? 1.5 : 0); } return s(b) - s(a); });
     if (pick.length < 6) return rows;
-    rows.splice(Math.min(3, rows.length), 0, S.R((dom ? CCL[dom] + " on " : "On ") + "ShowBox", pick.slice(0, 30), null, "tap Play with FebBox", 1, true));
+    rows.splice(Math.min(id === "korean" ? 4 : 3, rows.length), 0, S.R((dom ? CCL[dom] + " on " : "On ") + "ShowBox", pick.slice(0, 30), null, "tap Play with FebBox", 1, true));
     return rows;
+  }
+  // K-Drama page: the new-release rows get checked on ShowBox (answers remembered, a "no" re-checked after 4 days);
+  // titles ShowBox has get its label + Play with FebBox, and new Korean films only ShowBox has join the movies row
+  var kBusy = false;
+  function newKorean(rows) {
+    var rs = rows.filter(function (r) { return r && /^New (K-Drama Series|Korean Movies)$/.test(r.title); }); if (!rs.length) return;
+    var mv = rs.filter(function (r) { return /Movies/.test(r.title); })[0], Y = new Date().getFullYear();
+    if (mv) { var have = {}; mv.items.forEach(function (t) { have[norm(t.title)] = 1; });
+      country("KR").forEach(function (t) { if (t.sb && t.type === "MOVIE" && (t.year || 0) >= Y - 1 && !have[norm(t.title)]) { have[norm(t.title)] = 1; mv.items.push(t); } }); }
+    var todo = []; rs.forEach(function (r) { r.items.slice(0, 30).forEach(function (t) { if (t && !t.site && !t.sb) todo.push(t); }); });
+    if (kBusy || !todo.length) return; kBusy = true;
+    var k = 0, live = 0;
+    function lit(t) { document.querySelectorAll('.pc[data-id="' + t.id + '"]').forEach(function (c) { if (!c.querySelector(".sbl")) c.insertAdjacentHTML("beforeend", '<span class="sbl">ShowBox</span>'); }); }
+    function next() {
+      while (live < 3 && k < todo.length) { (function (t) { live++;
+        one({ t: t.title, y: t.year, type: t.type }, function (hit) { live--;
+          if (hit) { t.site = { url: hit.url }; S.T["st:" + hit.url] = t; HAS[norm(t.title) + "|" + (t.year || "")] = hit.url; saveLater(); lit(t); }
+          if (k >= todo.length && !live) kBusy = false; else next(); }); })(todo[k++]); }
+    }
+    next();
   }
   function wrapSections() { Object.keys(S.SECTIONS).forEach(function (k) { var f = S.SECTIONS[k]; if (typeof f !== "function" || f._sb) return;
     var g = function () { var r = f.apply(this, arguments); try { return mix(k, r); } catch (e) { return r; } }; g._sb = 1; S.SECTIONS[k] = g; }); }

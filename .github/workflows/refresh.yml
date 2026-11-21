@@ -397,7 +397,7 @@ jobs:
     needs: [bot1, bot2, bot3, bot4, bot5, bot6, bot7, bot8, bot9, bot10]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - id: got
@@ -410,18 +410,26 @@ jobs:
         run: |
           node -e 'const c=JSON.parse(require("fs").readFileSync(".done/catalog.json"));if(!(c.titles&&c.titles.length>=500))process.exit(1);console.log(c.titles.length,"titles,",c.generated)'
           cp .done/catalog.json catalog.json
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: node tools/trailers.mjs 600
-        continue-on-error: true
-      - name: Publish
+      - name: Publish the catalog
         run: |
           git config user.name "Vesper robot"
           git config user.email "actions@users.noreply.github.com"
-          git add catalog.json trailers.json
+          git add catalog.json
           git diff --cached --quiet && echo "no change" && exit 0
           git commit -m "Daily catalog $(date -u +%F)"
           for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done; exit 1
+      # trailers are a nice extra: after the catalog is safely out, never blocking it
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Trailers
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          node tools/trailers.mjs 600 || true
+          git add trailers.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Trailers $(date -u +%F)"
+          for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done
       - name: No catalog today — tell the owner
         if: steps.ok.outcome != 'success'
         env: { GH_TOKEN: "${{ github.token }}" }

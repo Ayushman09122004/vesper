@@ -326,7 +326,7 @@
   }
   // every open feels new: inside each row, titles get a gentle shuffle (popular ones still lean to the front);
   // ranked rows (Top 10, Coming Soon, New this week) and your own lists keep their order
-  var KEEP_ORDER = /^(Top 10|Coming Soon|New on|New Seasons|Continue|My List|Liked|Not for Me|Watched|Tonight's Three)/;
+  var KEEP_ORDER = /^(New K-Drama Series$|New Korean Movies$|Top 10|Coming Soon|New on|New Seasons|Continue|My List|Liked|Not for Me|Watched|Tonight's Three)/;
   function jitter(rows) {
     rows.forEach(function (r) {
       if (!r || r.kind === "top10" || r.kind === "trio" || r.keep || KEEP_ORDER.test(r.title)) return;
@@ -336,12 +336,12 @@
   }
   // rows themselves drift a few places each open: your own rows and Tonight's Three stay on top,
   // everything else (Top 10, Trending, the weather row…) moves up or down a little
-  var PINNED = /^(Continue|My List|Tonight's Three)/;
+  var PINNED = /^(Continue|My List|Tonight's Three|New K-Drama Series$|New Korean Movies$|New This Week from Korea$|Coming Soon from Korea$)/;
   function drift(rows) {
-    var top = [], rest = [];
-    rows.forEach(function (r) { (PINNED.test(r.title) || r.kind === "trio" ? top : rest).push(r); });
+    var top = [], rest = [], end = [];
+    rows.forEach(function (r) { (r.pin ? end : PINNED.test(r.title) || r.kind === "trio" ? top : rest).push(r); });
     rest = rest.map(function (r, i) { return { r: r, k: i + Math.random() * 4.5 }; }).sort(function (a, b) { return a.k - b.k; }).map(function (x) { return x.r; });
-    return top.concat(rest);
+    return top.concat(rest, end);
   }
   function renderSection(page, s) {
     var rows = S.finalize((S.SECTIONS[s] || S.SECTIONS.home)());

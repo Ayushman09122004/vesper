@@ -130,8 +130,8 @@
     function scopeOf(sec) {
       var m;
       if (sec === "movies") return { f: MOV, no: { genre: 0 } }; if (sec === "shows") return { f: SHO };
-      if (sec === "anime") return { f: hasG("ani"), no: { country: 1 } };
-      if (sec === "korean") return { f: inC("KR"), no: { country: 1 } }; if (sec === "english") return { f: inC("US"), no: { country: 1 } };
+      if (sec === "anime") return { f: env.isAnime || hasG("ani"), no: { country: 1 } };   // Asian anime, not Western cartoons
+      if (sec === "korean") return { f: function (t) { return inC("KR")(t) && (t.genres || []).indexOf("ani") < 0; }, no: { country: 1 } };   // live-action if (sec === "english") return { f: inC("US"), no: { country: 1 } };
       if (sec === "uk") return { f: inC(["GB", "IE"]), no: { country: 1 } }; if (sec === "indian") return { f: inC("IN"), no: { country: 1 } };
       if (sec === "world") return { f: function (t) { var c = fe(t).c; return c && ["US", "IN", "GB", "KR", "JP"].indexOf(c) < 0; } };
       if (sec === "new") { var Y = new Date().getFullYear(); return { f: function (t) { return t.year >= Y - 2; }, no: { era: 1 } }; }
@@ -199,12 +199,13 @@
       expand: function (sec, rows) {
         if (!scopeOf(sec) || !rows) return rows;
         used = {}; pageRecipes[sec] = {};
-        var keepN = sec === "home" ? 5 : 3, head = rows.slice(0, keepN), rest = rows.slice(keepN), r = rnd(hash(sec + "w") ^ openN);
+        var pin = rows.filter(function (x) { return x && x.pin; }); rows = rows.filter(function (x) { return !(x && x.pin); });   // pinned rows stay, at the end
+        var keepN = sec === "home" ? 5 : sec === "korean" ? 4 : 3, head = rows.slice(0, keepN), rest = rows.slice(keepN), r = rnd(hash(sec + "w") ^ openN);
         head = head.filter(function (x) { return !x || !x.title || rowWanted(x.title); });
         rest = rest.filter(function (x) { return r() < 0.45 && (!x || !x.title || rowWanted(x.title)); }).slice(0, sec === "home" ? 6 : 4);   // some of the usual rows, different ones each time
         var fresh = build(sec, sec === "home" ? 18 : 14), out = head.slice(), i = 0, j = 0;
         while (i < fresh.length || j < rest.length) { if (i < fresh.length) out.push(fresh[i++]); if (i < fresh.length) out.push(fresh[i++]); if (j < rest.length) out.push(rest[j++]); }
-        return out;
+        return out.concat(pin);
       },
       // endless: more fresh rows when you reach the bottom
       more: function (sec, n) { return scopeOf(sec) ? build(sec, n || 6) : []; },

@@ -54,9 +54,26 @@
   // ---------- shaping ----------
   function ids(a) { return (a || []).map(function (id) { return V.T[id]; }).filter(Boolean); }
   V.ids = ids;
-  var SEG_CC = { us_m: "US", us_s: "US", gb_m: "GB", gb_s: "GB", kr_s: "KR", kr_m: "KR", in_m: "IN", in_s: "IN", ani_s: "JP", ani_m: "JP", jp_live: "JP" };
+  var SEG_CC = { us_m: "US", us_s: "US", gb_m: "GB", gb_s: "GB", kr_s: "KR", kr_m: "KR", kr_new_s: "KR", kr_new_m: "KR", in_m: "IN", in_s: "IN", jp_live: "JP" };
   function seg(k) { var l = ids(((V.CAT.segs || {})[k] || { ids: [] }).ids), cc = SEG_CC[k]; l = cc ? l.filter(from(cc)) : l;
-    return k === "ani_m" ? l.filter(function (t) { return (t.countries || []).indexOf("US") < 0; }) : l; }
+    return /^ani_/.test(k) ? l.filter(isAnime) : /^kr_/.test(k) ? l.filter(function (t) { return (t.genres || []).indexOf("ani") < 0; }) : l; }   // K-dramas/films = live-action
+  /* Anime = Asian animation (Japan first, plus China, Korea, Taiwan) — not Western cartoons that merely list a Japanese
+     studio (Minions, Mario, Pixar…), and not Korean/Chinese kids' cartoons. Signals: a Japanese/Chinese/Korean original
+     title or romaji, being on Crunchyroll; otherwise Western co-productions count only when they aren't family films. */
+  var ASIA = { JP: 1, CN: 1, KR: 1, TW: 1, HK: 1 }, NEAR = { VN: 1, TH: 1, PH: 1, ID: 1, MY: 1, SG: 1, IN: 1 },
+    CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/, ROMAJI = /[ôûâêîōūā]|\b(no|wa|ga|wo|kun|chan|sama|sensei)\b/i;
+  function isAnime(t) {
+    if (!t) return false; if (t._an != null) return t._an;
+    var g = t.genres || [], c = t.countries || [], r = false;
+    if (g.indexOf("ani") >= 0 && c.some(function (x) { return ASIA[x]; })) {
+      var west = c.some(function (x) { return !ASIA[x] && !NEAR[x]; }), fam = g.indexOf("fml") >= 0;
+      if (CJK.test(t.otitle || "") || ROMAJI.test((t.otitle || "") + " " + t.title) || (t.avail || []).indexOf("com.crunchyroll.webapp") >= 0) r = true;
+      else if (!west) r = !(fam && c.indexOf("JP") < 0);
+      else r = c.indexOf("JP") >= 0 && !fam && !(c.indexOf("US") >= 0 && (t.year || 0) < 2013);   // Western co-productions: only Japanese ones
+    }
+    return (t._an = r);
+  }
+  V.isAnime = isAnime;
   function byPop(a) { return a.slice().sort(function (x, y) { return y.pop - x.pop; }); }
   function quality(t) { return (t.imdb || 6) * 10 + Math.log(1 + t.votes) + Math.log(1 + t.pop) * 2; }
   function byQ(a) { return a.slice().sort(function (x, y) { return quality(y) - quality(x); }); }
@@ -264,8 +281,28 @@
     shows: function () { var s = V.ALL.filter(isType("SHOW"));
       return [R("Top 10 Series in India Today", topList("SHOW"), "top10"), R("Popular Series", seg("shows")), R("Bingeworthy", seg("acc_s")), R("American Series", seg("us_s")),
         R("K-Dramas", seg("kr_s")), R("Anime", seg("ani_s")), R("British Series", seg("gb_s")), R("Indian Series", seg("in_s")), R("International Series", seg("world_s"))].concat(stdRows(s, "Series")); },
-    anime: function () { var a = seg("ani_s").concat(seg("ani_m")); return [R("Popular Anime", seg("ani_s")), R("Rainy-Day Anime", wxRow("anime"), null, WXK.anime.d), R("Anime Films", seg("ani_m"))].concat(stdRows(a, "Anime")); },
-    korean: function () { var k = V.ALL.filter(from("KR")); return [R("K-Dramas", seg("kr_s")), R("Korean Films", seg("kr_m")), R("Romantic K-Dramas", byPop(k.filter(isType("SHOW")).filter(hasG("rma"))))].concat(stdRows(k, "Korean")); },
+    anime: function () {
+      var a = V.ALL.filter(isAnime), seen = {};
+      a = seg("ani_s").concat(seg("ani_m"), seg("ani_cn"), a).filter(function (t) { if (seen[t.id]) return false; seen[t.id] = 1; return true; });
+      var cn = a.filter(function (t) { var c = t.countries || []; return c.indexOf("JP") < 0 && (c.indexOf("CN") >= 0 || c.indexOf("TW") >= 0 || c.indexOf("HK") >= 0); });
+      // Western animation: one small row, only the very best (Arcane, Spider-Verse…), always last
+      var west = byQ(V.ALL.filter(function (t) { return hasG("ani")(t) && !isAnime(t) && (t.imdb || 0) >= 7.8 && (t.votes || 0) >= 20000 && (t.avail || []).length; })).slice(0, 18);
+      var w = R("Western Animation", west, null, "the best of the rest"); w.pin = 1;
+      return [R("Popular Anime", seg("ani_s")), R("New Anime", fresh(a)), R("Anime Films", byPop(a.filter(isType("MOVIE")))), R("Rainy-Day Anime", wxRow("anime").filter(isAnime), null, WXK.anime.d),
+        R("Chinese Animation", byPop(cn), null, "donghua")].concat(stdRows(a, "Anime").filter(function (r) { return r.title !== "New Anime"; }), [w]); },
+    korean: function () {
+      var k = V.ALL.filter(function (t) { return from("KR")(t) && !hasG("ani")(t); }), last = {};   // live-action only
+      (V.CAT.arrivals || []).forEach(function (x) { if (!last[x.id] || x.date > last[x.id]) last[x.id] = x.date; });
+      // newest first: this year before last, then what just landed on your apps, then what people are watching
+      function newest(l, extra) { var seen = {};
+        return (extra || []).concat(l).filter(function (t) { if (!t || seen[t.id] || !(t.avail || []).length || (t.year || 0) < YEAR - 1) return false; seen[t.id] = 1; return true; })
+          .sort(function (x, y) { return (y.year - x.year) || ((last[y.id] || "") < (last[x.id] || "") ? -1 : (last[y.id] || "") > (last[x.id] || "") ? 1 : 0) || (y.pop - x.pop); }); }
+      var drama = function (t) { return t.type === "SHOW" && !hasG("rly", "doc", "ani")(t); };
+      return [R("New K-Drama Series", newest(k.filter(drama), seg("kr_new_s").filter(drama)), null, "newest first"),
+        R("New Korean Movies", newest(k.filter(isType("MOVIE")), seg("kr_new_m").filter(not(hasG("ani")))), null, "newest first"),
+        R("New This Week from Korea", arrivals(function (x, t) { return from("KR")(t) && !hasG("ani")(t); }), null, "just landed on your apps", 3),
+        R("Coming Soon from Korea", comingSoon().filter(from("KR")).filter(not(hasG("ani"))), null, "dates on your apps", 1),
+        R("K-Dramas", seg("kr_s")), R("Korean Films", seg("kr_m")), R("Romantic K-Dramas", byPop(k.filter(isType("SHOW")).filter(hasG("rma"))))].concat(stdRows(k, "Korean")); },
     english: function () { var e = V.ALL.filter(from("US")); return [R("Hollywood Blockbusters", seg("us_m")), R("American Series", seg("us_s")), R("Critically Acclaimed", topRated(e))].concat(stdRows(e, "Hollywood")); },
     uk: function () { var u = V.ALL.filter(from("GB")); return [R("British Series", seg("gb_s")), R("British Films", seg("gb_m")), R("British Grey Skies", wxRegion(["GB", "IE"]))].concat(stdRows(u, "British")); },
     indian: function () { var n = V.ALL.filter(from("IN")); return [R("Indian Cinema", seg("in_m")), R("Indian Series", seg("in_s")), R("Only on JioHotstar", origOf("hotstar"))].concat(stdRows(n, "Indian")); },
@@ -275,7 +312,7 @@
     V.SECTIONS["app:" + a] = function () { var l = V.ALL.filter(on(a)), n = LABEL[a];
       var rows = [R(ORIG_ROW[a], origOf(a)), R("Top 10 on " + n + " Today", l.filter(function (t) { return t.rank; }).sort(function (x, y) { return x.rank - y.rank; }), "top10"),
         R("New on " + n, arrivals(function (x) { return x.app === a; }), null, "this week", 3), R("Popular on " + n, seg("app_" + a)), R("New Releases", fresh(l)), R("Top Rated", topRated(l)),
-        R("Rainy & Gloomy", wxRow("rain", 80).filter(on(a))), R("Anime", byPop(l.filter(hasG("ani")))), R("K-Dramas", byPop(l.filter(from("KR")).filter(isType("SHOW")))),
+        R("Rainy & Gloomy", wxRow("rain", 80).filter(on(a))), R("Anime", byPop(l.filter(isAnime))), R("K-Dramas", byPop(l.filter(from("KR")).filter(isType("SHOW")).filter(not(hasG("ani"))))),
         R("Hollywood", byPop(l.filter(from("US")))), R("Hidden Gems", gems(l))];
       GENRE_ROWS.forEach(function (g) { rows.push(R(g[1], byPop(l.filter(hasG(g[0]))))); });
       rows.push(R("Classics", classics(l))); return rows; };
