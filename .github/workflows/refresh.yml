@@ -1,57 +1,442 @@
+# Vesper's daily catalog — a relay of bots, no computer or phone needed.
+# JustWatch blocks one machine's address after ~75 quick requests; a full build needs ~400. Each bot below is a fresh
+# GitHub machine (fresh address): it replays everything the bots before it saved, fetches until JustWatch blocks it,
+# then hands its saved answers on. The first bot to finish the build hands over the catalog; "publish" commits it.
+# Runs 4x every morning; once today's catalog is published, later runs stop at once. Fails → GitHub issue (email).
 name: Refresh catalog
 on:
   schedule:
-    - cron: "30 4 * * *"   # 10:00 India time — backup: the Mac publishes first (tools/mac-daily.sh); this only builds if that didn't happen
+    - cron: "30 0 * * *"    # 06:00 India
+    - cron: "30 2 * * *"    # 08:00 — only if 06:00 didn't make it
+    - cron: "30 5 * * *"    # 11:00
+    - cron: "30 9 * * *"    # 15:00
   workflow_dispatch: {}
 permissions:
   contents: write
   issues: write
+  actions: read
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+env:
+  JW_CACHE: .jwcache/answers.json.gz
+  JW_PACE_MS: "500"
+  SKIP_IF_FRESH_HOURS: "20"
 jobs:
-  refresh:
+  bot1:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Build catalog
-        id: build
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
         continue-on-error: true
-        run: SKIP_IF_FRESH_HOURS=20 node tools/build-catalog.mjs
-      # JustWatch sometimes rate-limits GitHub's machines for a while: wait it out and try once more
-      - name: Build catalog (second try)
-        if: steps.build.outcome == 'failure'
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 1)
+        if: steps.have.outcome != 'success'
         run: |
-          git checkout -- catalog.json || true
-          sleep 900
-          SKIP_IF_FRESH_HOURS=20 node tools/build-catalog.mjs
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 1 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot2:
+    needs: bot1
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 2)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 2 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot3:
+    needs: bot2
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 3)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 3 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot4:
+    needs: bot3
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 4)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 4 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot5:
+    needs: bot4
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 5)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 5 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot6:
+    needs: bot5
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 6)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 6 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot7:
+    needs: bot6
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 7)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 7 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot8:
+    needs: bot7
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 8)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 8 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot9:
+    needs: bot8
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 9)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 9 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  bot10:
+    needs: bot9
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - id: have
+        name: Catalog already built by an earlier bot?
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Progress from the bots before
+        if: steps.have.outcome != 'success'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: progress, path: .jwcache }
+      - uses: actions/setup-node@v4
+        if: steps.have.outcome != 'success'
+        with: { node-version: 22 }
+      - id: build
+        name: Build (bot 10)
+        if: steps.have.outcome != 'success'
+        run: |
+          set +e
+          node tools/build-catalog.mjs; code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 1 ] && echo "::warning::bot 10 hit an error — the next bot carries on"
+          exit 0
+      - name: Hand progress on
+        if: steps.build.outputs.code != '' && steps.build.outputs.code != '0'
+        uses: actions/upload-artifact@v4
+        with: { name: progress, path: .jwcache/, overwrite: true, retention-days: 1, if-no-files-found: ignore }
+      - name: Hand over the catalog
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-artifact@v4
+        with: { name: catalog, path: catalog.json, retention-days: 1 }
+  publish:
+    needs: [bot1, bot2, bot3, bot4, bot5, bot6, bot7, bot8, bot9, bot10]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: got
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: catalog, path: .done }
+      - name: Check the catalog
+        id: ok
+        if: steps.got.outcome == 'success'
+        run: |
+          node -e 'const c=JSON.parse(require("fs").readFileSync(".done/catalog.json"));if(!(c.titles&&c.titles.length>=500))process.exit(1);console.log(c.titles.length,"titles,",c.generated)'
+          cp .done/catalog.json catalog.json
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
       - run: node tools/trailers.mjs 600
         continue-on-error: true
-      - name: Save new catalog
+      - name: Publish
         run: |
           git config user.name "Vesper robot"
           git config user.email "actions@users.noreply.github.com"
           git add catalog.json trailers.json
           git diff --cached --quiet && echo "no change" && exit 0
           git commit -m "Daily catalog $(date -u +%F)"
-          git pull --rebase -q origin main || true
-          git push
-      # anything above failed twice: open (or bump) an issue so GitHub emails you — no silent stale catalog
-      - name: Tell the owner
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
+          for i in 1 2 3; do git pull --rebase -q origin main && git push && exit 0; sleep 5; done; exit 1
+      - name: No catalog today — tell the owner
+        if: steps.ok.outcome != 'success'
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
+          # only alarm when the PUBLISHED catalog is really getting old (a later run today may still make it)
+          age=$(node -e 'console.log(Math.round((Date.now()-Date.parse(JSON.parse(require("fs").readFileSync("catalog.json")).generated))/36e5))')
+          echo "published catalog is ${age}h old"
+          [ "$age" -lt 30 ] && exit 0
           url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           n=$(gh issue list --state open --label robot-failed --json number --jq '.[0].number' 2>/dev/null || true)
-          if [ -n "$n" ]; then gh issue comment "$n" --body "Failed again on $(date -u +%F): $url"
+          if [ -n "$n" ]; then gh issue comment "$n" --body "Still failing ($(date -u +%F), catalog ${age}h old): $url"
           else gh label create robot-failed --color d73a4a --force >/dev/null 2>&1 || true
-               gh issue create --label robot-failed --title "Vesper catalog robot failed ($(date -u +%F))" --body "The daily catalog didn't update, so Vesper's apps are showing an older catalog. Run log: $url"; fi
-      - name: All good again — close the alert
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
+               gh issue create --label robot-failed --title "Vesper catalog is ${age}h old" --body "The bots couldn't build today's catalog. Run log: $url"; fi
+          exit 1
+      - name: All good — close any alert
+        if: steps.ok.outcome == 'success'
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           for n in $(gh issue list --state open --label robot-failed --json number --jq '.[].number' 2>/dev/null); do
             gh issue close "$n" --comment "Catalog updated fine on $(date -u +%F)."; done
