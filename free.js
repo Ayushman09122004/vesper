@@ -20,19 +20,24 @@
   var LOOK = "autoplay=true&chromecast=true&servericon=true&setting=true&pip=true&font=Roboto&fontcolor=ffffff&fontsize=20&opacity=0.5&primarycolor=ffffff&secondarycolor=0a0b0d&iconcolor=ffffff&skipintro=true&upnext=false&autonext=false";
   function brand(host) { return function (ty, id, s, e) { return "https://" + host + (ty === "tv" ? "/embed/tv/" + id + "/" + s + "/" + e : "/embed/movie/" + id) + "?" + LOOK; }; }
   function path(base, q, pre) { return function (ty, id, s, e) { return base + (pre || "") + (ty === "tv" ? "tv/" + id + "/" + s + "/" + e : "movie/" + id) + (q || ""); }; }
+  // ad: 0 = no ads, "lock" = runs in a locked frame (pop-ups and redirects can't fire), 1 = shows ads (can't be locked: they refuse to play)
+  var SB = "allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock";
   var SERVERS = [
-    { k: "vidqueen", n: "VidQueen", d: "Best · 1080p", u: brand("player.vidqueen.st") },
-    { k: "vidgold", n: "VidGold", d: "No ads", u: brand("player.vidgold.net") },
-    { k: "cinezo", n: "Cinezo", d: "No ads", u: path("https://player.cinezo.live/", "", "embed/") },
-    { k: "vsembed", n: "VsEmbed", d: "Ads · tap play", quiet: 1, u: path("https://vsembed.ru/", "", "embed/") },
-    { k: "vidmario", n: "VidMario", d: "Skip intro", u: brand("player.vidmario.net") },
-    { k: "vidrift", n: "VidRift", d: "Subtitles", u: path("https://embed.vidrift.net/", "?hide=next,episodes", "embed/") },
-    { k: "vidlink", n: "VidLink", d: "Ads", u: path("https://vidlink.pro/", "?autoplay=true") },
-    { k: "vidora", n: "Vidora", d: "Ads", u: path("https://vidora.ac/", "?autoplay=true") },
-    { k: "vidup", n: "Vidup", d: "Ads", u: path("https://vidup.to/", "?autoPlay=true") },
-    { k: "vidbolt", n: "VidBolt", d: "Multi-audio · tap play", quiet: 1, u: path("https://vidbolt.pro/", "?autoPlay=true&nextEpisodeButton=false&episodesButton=false") }
+    { k: "vidqueen", n: "VidQueen", d: "No ads · best", ad: 0, u: brand("player.vidqueen.st") },
+    { k: "vidgold", n: "VidGold", d: "No ads", ad: 0, u: brand("player.vidgold.net") },
+    { k: "cinezo", n: "Cinezo", d: "Locked · no pop-ups", ad: "lock", u: path("https://player.cinezo.live/", "", "embed/") },
+    { k: "vidrift", n: "VidRift", d: "Locked · subtitles", ad: "lock", u: path("https://embed.vidrift.net/", "?hide=next,episodes", "embed/") },
+    { k: "vidora", n: "Vidora", d: "Locked · no pop-ups", ad: "lock", u: path("https://vidora.ac/", "?autoplay=true") },
+    { k: "vidmario", n: "VidMario", d: "May show ads", ad: 1, u: brand("player.vidmario.net") },
+    { k: "vidlink", n: "VidLink", d: "Ads", ad: 1, u: path("https://vidlink.pro/", "?autoplay=true") },
+    { k: "vidup", n: "Vidup", d: "Ads", ad: 1, u: path("https://vidup.to/", "?autoPlay=true") },
+    { k: "vsembed", n: "VsEmbed", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vsembed.ru/", "", "embed/") },
+    { k: "vidbolt", n: "VidBolt", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vidbolt.pro/", "?autoPlay=true&nextEpisodeButton=false&episodesButton=false") }
   ];
-  function order() { var fav = ld("srv", ""), l = SERVERS.filter(function (x) { return !x.quiet; }).concat(SERVERS.filter(function (x) { return x.quiet; })); var i = l.findIndex(function (x) { return x.k === fav; }); if (i > 0) l.unshift(l.splice(i, 1)[0]); return l; }
+  var NOADS = ld("noads", true);   // keep servers with ads out of the way (default)
+  function adsOk() { return !NOADS || (P && P.allowAds); }
+  function order(all) { var fav = ld("srv", ""), rank = function (x) { return x.ad === 0 ? 0 : x.ad === "lock" ? 1 : x.quiet ? 3 : 2; };
+    var l = SERVERS.filter(function (x) { return all || x.ad !== 1 || adsOk(); }).sort(function (a, b) { return rank(a) - rank(b) || SERVERS.indexOf(a) - SERVERS.indexOf(b); }); var i = l.findIndex(function (x) { return x.k === fav; }); if (i > 0) l.unshift(l.splice(i, 1)[0]); return l; }
 
   // ---------- titles ----------
   var BYIMDB = null;
@@ -115,6 +120,8 @@
     ".fsauto{position:absolute;left:10px;right:10px;bottom:10px;z-index:2;display:flex;align-items:center;gap:10px;background:rgba(10,10,14,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:12px;padding:9px 10px 9px 14px;color:#fff;font:500 13.5px -apple-system,system-ui,sans-serif}" +
     ".fsauto span{flex:1}.fsauto button{border:0;border-radius:99px;background:#fff;color:#000;font:600 13px -apple-system,system-ui,sans-serif;padding:7px 13px;cursor:pointer}.fsauto button.g{background:rgba(255,255,255,.16);color:#fff}" +
     ".fsrv button.bad{opacity:.45}.fsrv button.ok small{color:#7be0a8}" +
+    ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
+    ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
     ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
     ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
@@ -151,6 +158,8 @@
       if (b.hasAttribute("data-fsnexts")) { if (W && W.k === P.srv) { W.done = 0; return fail("user"); } var l = order(), j = l.findIndex(function (x) { return x.k === P.srv; }); P.srv = l[(j + 1) % l.length].k; return load(); }
       if (b.hasAttribute("data-fsstay")) return settle(false);
       if (b.hasAttribute("data-fsgo")) return fail("user");
+      if (b.hasAttribute("data-fsads")) { P.allowAds = 1; var na = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (na) { P.srv = na.k; P.auto = 1; load(); } return; }
+      if (b.hasAttribute("data-fsadsw")) { NOADS = !NOADS; sv("noads", NOADS); return dock(); }
       if (b.hasAttribute("data-fsretry")) { P.bad = {}; P.auto = 1; P.srv = order()[0].k; return load(); }
       if (b.hasAttribute("data-fsprev")) return step(-1);
       if (b.hasAttribute("data-fsnext")) return step(1);
@@ -176,9 +185,14 @@
         '<select data-fse>' + cur.eps.map(function (x) { return '<option value="' + x.e + '"' + (x.e === P.e ? " selected" : "") + ">" + x.e + ". " + esc(x.title) + "</option>"; }).join("") + "</select>" +
         '<button data-fsprev>‹ Prev</button><button data-fsnext>Next ›</button></div>';
     }
-    html += '<div class="fsh">Servers</div><div class="fsrv">' + order().map(function (x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + "><b>" + x.n + "</b><small>" + x.d + "</small></button>"; }).join("") + "</div>" +
+    function cell(x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + "><b>" + x.n + (x.ad === 0 ? ' <span class="fsok">✓</span>' : x.ad === "lock" ? ' <span class="fslk">🔒</span>' : "") + "</b><small>" + x.d + "</small></button>"; }
+    var all = order(true), clean = all.filter(function (x) { return x.ad !== 1; }), ads = all.filter(function (x) { return x.ad === 1; });
+    html += '<div class="fsh">Ad-free servers</div><div class="fsrv">' + clean.map(cell).join("") + "</div>" +
+      '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
+      (NOADS && !(P && P.allowAds) ? '<p class="fsnote" style="margin-top:-2px">Vesper only tries these when no ad-free server has the title. You can still tap one.</p>' : "") +
+      '<div class="fsrv fsrvad">' + ads.map(cell).join("") + "</div>" +
       '<button class="fsnx" data-fsnexts style="width:100%;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer">Not playing? Try the next server</button>' +
-      '<p class="fsnote">Free players from other sites. If one shows nothing, Vesper moves to the next by itself — tap the picture or Stay to keep one. The server that works is tried first next time.</p>';
+      '<p class="fsnote">Free players from other sites. If one shows nothing, Vesper moves to the next by itself — tap the picture or Stay to keep one. 🔒 servers run locked, so their pop-up and redirect ads can’t open. Ads drawn inside a player’s own picture can’t be removed from outside it.</p>';
     d.innerHTML = html; mark();
   }
   function load() {
@@ -192,6 +206,7 @@
     var f = document.createElement("iframe");
     f.setAttribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
     f.setAttribute("allowfullscreen", ""); f.setAttribute("referrerpolicy", "origin");
+    if (sv0.ad === "lock") f.setAttribute("sandbox", SB);   // pop-up and redirect ads can't fire from in here
     f.src = sv0.u(tv ? "tv" : "movie", P.tmdb, P.s, P.e);
     f.onload = function () { msg.textContent = ""; };
     box.appendChild(f);
@@ -229,6 +244,7 @@
     if (!W || W.done || !P) return; W.done = 1; clearTimeout(autoT); clearInterval(tickT);
     P.bad = P.bad || {}; P.bad[W.k] = 1;
     var l = order(), nx = l.filter(function (x) { return !P.bad[x.k]; })[0];
+    if (!nx && !adsOk()) { banner('<span>The ad-free servers don’t have this one.</span><button data-fsads>Try ones with ads</button>'); return; }
     if (!nx) { banner('<span>None of the servers had this one. Try them again in a bit.</span><button class="g" data-fsretry>Retry</button>'); return; }
     var from = (SERVERS.filter(function (x) { return x.k === W.k; })[0] || {}).n;
     P.srv = nx.k; P.auto = 1; load();
@@ -262,12 +278,15 @@
   });
   // a tap inside the player (the page loses focus to the frame) = you're using it: no more switching
   window.addEventListener("blur", function () { setTimeout(function () { if (W && !W.done && document.activeElement === W.f) settle(false); }, 0); });
+  // an ad that tries to send the whole page elsewhere gets a "Leave site?" question instead (laptop browsers)
+  function onLeave(e) { e.preventDefault(); e.returnValue = ""; return ""; }
+  function guard(on) { if (on) window.addEventListener("beforeunload", onLeave); else window.removeEventListener("beforeunload", onLeave); }
   function play(t, ep) {
     if (!can(t)) return;
     build(); if (S.markViewed) try { S.markViewed(t.id); } catch (e) {}
     P = { t: t, auto: 1, bad: {}, srv: order()[0].k, s: ep && ep.s || 1, e: ep && (ep.e || ep.n) || 1, tmdb: null, ss: null, explicit: !!ep };
     el.querySelector(".fst b").textContent = t.title + (t.year ? " (" + t.year + ")" : "");
-    el.classList.remove("dock", "quiet"); el.classList.add("on");
+    el.classList.remove("dock", "quiet"); el.classList.add("on"); guard(true);
     history.pushState({ fsp: 1, d: history.state && history.state.d }, "");
     load();
     var my = P;
@@ -283,7 +302,7 @@
   }
   function close(fromPop) {
     if (!el || !el.classList.contains("on")) return false;
-    el.classList.remove("on", "dock"); clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
+    el.classList.remove("on", "dock"); guard(false); clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
     if (!fromPop && history.state && history.state.fsp) history.back();
     return true;
   }
