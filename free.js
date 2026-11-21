@@ -130,6 +130,9 @@
     ".fsp.max .fsv{position:fixed;left:env(safe-area-inset-left);top:0;width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));height:100vh;height:100dvh;aspect-ratio:auto;z-index:5;background:#000;flex:none}" +
     // turned sideways: keep clear of the notch (phone's top) and the home bar (phone's bottom)
     ".fsp.max.rot .fsv{width:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));height:100vw;left:50%;top:calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);transform:translate(-50%,-50%) rotate(90deg)}" +
+    "html.fspin,html.fspin body{overflow:hidden!important;overscroll-behavior:none}" +
+    ".fsp.pin .fsbar,.fsp.pin .fsdock,.fsp.pin .fsmaxx,.fsp.pin .fsauto{display:none!important}" +
+    ".fsp.pin .fsv{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;aspect-ratio:auto!important;transform:none!important;margin:0!important;background:#000!important;z-index:2147483000!important}" +
     ".fsv.kk{overflow:hidden;background:#000}.fsv.kk iframe{inset:auto;position:absolute}" +
     "html.desk .fsp:not(.max) .fsv.kk{height:auto;aspect-ratio:16/9;align-self:flex-start}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
@@ -242,6 +245,7 @@
     var w = Math.min(W0, H0 * 16 / 9), hdr = w >= 768 ? 64 : 56;
     f.style.width = w + "px"; f.style.left = (W0 - w) / 2 + "px"; f.style.top = (H0 - w * 9 / 16) / 2 - hdr + "px"; f.style.height = (w * 9 / 16 + hdr) + "px";
   }
+  function pin(on) { if (!el) return; el.classList.toggle("pin", on); document.documentElement.classList.toggle("fspin", on); }
   function step(d) {
     var flat = []; (P.ss || []).forEach(function (s) { s.eps.forEach(function (x) { flat.push(x); }); });
     var i = flat.findIndex(function (x) { return x.s === P.s && x.e === P.e; }), n = flat[i + d]; if (!n) return;
@@ -288,6 +292,7 @@
     }
     var cur = box.querySelector("iframe"); if (cur && cur.dataset.src === src) return;   // already showing it
     if (cur) cur.remove();
+    pin(false);   // a new player starts out of full screen
     msg.textContent = "Loading " + sv0.n + "…";
     var f = document.createElement("iframe"); f.dataset.src = src;
     f.setAttribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
@@ -355,6 +360,9 @@
     var d = e.data; if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } } if (!d || typeof d !== "object") return;
     var ev = d.type === "PLAYER_EVENT" && d.data ? d.data : null;
     if (ev) {
+      // VidQueen / VidGold / VidMario on iPhone: their own full screen only fills their frame, so they ask the page to
+      // let the frame cover the whole screen while it lasts (same as the aggregator site does)
+      if (ev.event === "fullscreen-enter" || ev.event === "fullscreen-exit") { pin(ev.event === "fullscreen-enter"); return; }
       if (ev.event === "play" || ev.event === "playing" || +ev.duration > 0 || +ev.currentTime > 0.3) { if (!W.done) settle(true); }
       if (+ev.currentTime > 0 && +ev.duration > 0) prog(+ev.currentTime, +ev.duration);
       if (ev.event === "ended" && P.t.type === "SHOW" && W.done) { step(1); }
@@ -397,7 +405,7 @@
   function msgSet(s) { var m = el.querySelector(".fsmsg"); if (m) m.textContent = s; var o = el.querySelector(".fsv iframe"); if (o) o.remove(); el.querySelector(".fst small").textContent = ""; el.querySelector(".fsdock").innerHTML = ""; }
   function close(fromPop) {
     if (!el || !el.classList.contains("on")) return false;
-    el.classList.remove("on", "dock", "max", "rot"); guard(false); clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
+    el.classList.remove("on", "dock", "max", "rot"); pin(false); guard(false); clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
     if (!fromPop && history.state && history.state.fsp) history.back();
     return true;
   }
