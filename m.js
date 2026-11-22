@@ -713,8 +713,21 @@
           if (full) { whob.appendChild(h("div", "sec-h", "On your apps <small class=\"secsub\">" + onApps.length + "</small>")); appsEl = yearsGrid(onApps.map(function (p) { return p.t; })); whob.appendChild(appsEl); }
           else { appsEl = rowEl(S.R(pre + hit.name + " on your apps", onApps.map(function (p) { return p.t; }), null, onApps.length + "", 1, true)); whob.appendChild(appsEl); appsEl._fill(); }
         }
+        // everything else they made, on the free servers (the filmography carries IMDb ids, which is all the free players need)
+        var freeIds = {};
+        if (window.VFS && VFS.on()) {
+          var fl = []; pairs.forEach(function (p) { if (!p.w.imdb || (p.t && appIds[p.t.id])) return;
+            var ft = VFS.T({ id: p.w.imdb, name: p.w.t, type: p.w.type === "SHOW" ? "series" : "movie", releaseInfo: String(p.w.y || "") });
+            if (ft && !(ft.avail || []).length && !hid[ft.id] && fl.indexOf(ft) < 0) { fl.push(ft); freeIds[p.w.t + "|" + p.w.y] = 1; } });
+          if (fl.length) {
+            if (full) { whob.appendChild(h("div", "sec-h", "On free servers <small class=\"secsub\">" + fl.length + " · tap Watch free</small>")); whob.appendChild(yearsGrid(fl)); }
+            else { var frow = rowEl(S.R(pre + hit.name + " on free servers", fl.slice(0, 40), null, fl.length + " · tap Watch free", 1, true)); frow.classList.add("fsres"); whob.appendChild(frow); frow._fill(); }
+            var hn = head.querySelector("b:last-of-type"); head.insertAdjacentHTML("beforeend", ' · <b>' + fl.length + "</b> on free servers");
+          }
+        }
         var rest = h("div"); whob.appendChild(rest);
         function missing(foundIds) {
+          foundIds = Object.assign({}, foundIds || {}, freeIds);
           if (!full) return; rest.textContent = "";
           var miss = pairs.filter(function (p) { return !(p.t && appIds[p.t.id]) && !foundIds[p.w.t + "|" + p.w.y]; });
           if (!miss.length) return;
