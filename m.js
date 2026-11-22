@@ -105,6 +105,7 @@
   }
   function trioNote() { var p = S.partOfDay(), wn = S.wxNow(); return (wn && (p === "evening" || p === "night") ? wn.title + " · " : "") + "for " + (p === "morning" ? "this morning" : p === "afternoon" ? "this afternoon" : "tonight"); }
   function rowEl(r) {
+    if (r.kind === "fest" && window.VFS && VFS.festEl) return VFS.festEl(r);   // seasonal banner (free.js)
     var row = h("div", "row"), rail = h("div", "rail" + (r.kind === "top10" ? " toprail" : ""));
     row.innerHTML = '<div class="row-h">' + esc(r.title) + (r.kind === "trio" ? "<small>" + esc(trioNote()) + "</small>" : r.sub ? "<small>" + esc(r.sub) + "</small>" : "") +
       (r.more ? '<button class="seeall" data-go="throwback" data-era="' + r.more + '">All' + G.r + "</button>" : "") + "</div>";
@@ -116,7 +117,7 @@
         var s = h("div", "wide surprise", '<div class="art"><div class="q">' + G.dice + "</div><b>Tonight's surprise</b><small>Tap to turn it over</small></div><div class=\"vibe\">&nbsp;</div>");
         s.addEventListener("click", function (e) { e.stopPropagation(); var t = S.surprisePick(); if (!t) return; buzz(); s.replaceWith(wideCard(t)); });
         f.appendChild(s);
-      } else r.items.forEach(function (t, i) { f.appendChild(r.kind === "top10" ? topCard(t, i) : poster(t, i)); });
+      } else r.items.forEach(function (t, i) { f.appendChild(r.kind === "top10" ? topCard(t, i) : r.kind === "cw" && window.VFS ? VFS.cwCard(t) : poster(t, i)); });
       rail.appendChild(f);
       if (POS[r.title]) rail.scrollLeft = POS[r.title];
       rail.addEventListener("scroll", function () { POS[r.title] = rail.scrollLeft; }, { passive: true });
@@ -1469,7 +1470,7 @@
 
   // ---------- trailers (YouTube; found daily by tools/trailers.mjs) ----------
   var TR = {};
-  window.VUI = { trailer: function (t) { return trailerOf(t); }, open: function (id, rect) { fromRect = rect || null; openDetail(id); }, meta: function (t) { return metaBits(t); }, ytWatch: function (f, cb) { ytWatch(f, cb); },
+  window.VUI = { go: function (t, s, a) { show(t, s, a); }, trailer: function (t) { return trailerOf(t); }, open: function (id, rect) { fromRect = rect || null; openDetail(id); }, meta: function (t) { return metaBits(t); }, ytWatch: function (f, cb) { ytWatch(f, cb); },
     rank: function (t) { return rankOf(t); }, G: G, buzz: function () { buzz(); } };
   function trailerOf(t) { return t && TR[t.id] || ""; }
   function ytSearch(t) { return "https://www.youtube.com/results?search_query=" + encodeURIComponent(t.title + (t.year ? " " + t.year : "") + " official trailer"); }

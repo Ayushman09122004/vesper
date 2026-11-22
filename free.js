@@ -33,6 +33,13 @@
     { k: "vidlink", n: "VidLink", d: "Ads", ad: 1, u: path("https://vidlink.pro/", "?autoplay=true") },
     { k: "vidup", n: "Vidup", d: "Ads", ad: 1, u: path("https://vidup.to/", "?autoPlay=true") },
     { k: "vsembed", n: "VsEmbed", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vsembed.ru/", "", "embed/") },
+    // from 1shows.org's provider list (api.viduki.net/embed_providers?site=1shows) — none of these play in a locked frame
+    { k: "vidfast", n: "VidFast", d: "May show ads", ad: 1, u: path("https://vidfast.pro/", "?autoPlay=true&title=true&poster=true&theme=ffffff") },
+    { k: "vidrock", n: "VidRock", d: "May show ads", ad: 1, u: path("https://vidrock.to/", "?theme=ffffff&autoplay=true&autonext=false&download=false&nextbutton=false&episodeselector=false") },
+    { k: "vidy", n: "Vidy", d: "May show ads", ad: 1, u: path("https://vidy.st/", "?color=ffffff") },
+    { k: "viduki", n: "Viduki", d: "May show ads", ad: 1, quiet: 1, u: path("https://www.viduki.net/1/", "?color=ffffff") },
+    { k: "viduki2", n: "Viduki Multi", d: "Other languages · ads", ad: 1, quiet: 1, u: path("https://www.viduki.net/2/", "?color=ffffff") },
+    { k: "vidzee", n: "VidZee", d: "Ads", ad: 1, u: path("https://player.vidzee.wtf/", "?color=ffffff", "embed/") },
     { k: "vidbolt", n: "VidBolt", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vidbolt.pro/", "?autoPlay=true&nextEpisodeButton=false&episodesButton=false") }
   ];
   var NOADS = ld("noads", true);   // keep servers with ads out of the way (default)
@@ -149,6 +156,23 @@
     ".stx small{display:block;color:rgba(255,255,255,.55);font-size:12.5px;line-height:1.35;margin-top:2px}" +
     ".sbres:not(.fsres)>.row-h::before,.fsres>.row-h::before{content:'SB';display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;margin-right:8px;vertical-align:-3px;font:900 8.5px -apple-system,system-ui,sans-serif;background:#f3a46b;color:#1a0d05}" +
     ".fsres>.row-h::before{content:'▶';font-size:9px;background:#3fcf8e;color:#04140b}" +
+    ".cwc{flex:none;width:68vw;max-width:340px;scroll-snap-align:start;cursor:pointer}" +
+    ".cwa{position:relative;aspect-ratio:16/9;border-radius:9px;overflow:hidden;background:#15151e;box-shadow:0 6px 18px rgba(0,0,0,.3)}" +
+    ".cwa img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}.cwa img.ok{opacity:1}" +
+    ".cwg{position:absolute;inset:0;background:linear-gradient(transparent 35%,rgba(0,0,0,.82))}" +
+    ".cwp{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);width:42px;height:42px;border-radius:99px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.75);display:flex;align-items:center;justify-content:center;color:#fff;padding-left:3px}" +
+    ".cwt{position:absolute;left:12px;right:12px;bottom:12px;color:#fff}.cwt b{display:block;font:800 15px -apple-system,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cwt small{font:600 11.5px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.72)}" +
+    ".cwb{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.25)}.cwb i{display:block;height:100%;background:#e50914}" +
+    "html.desk .cwc{width:340px}" +
+    ".fest{padding:0 16px}.fsc{position:relative;overflow:hidden;border-radius:16px;padding:22px 18px 18px;min-height:210px;display:flex;align-items:center;box-shadow:0 14px 40px -18px rgba(0,0,0,.7)}" +
+    ".fsl8{position:absolute;left:0;right:0;top:0;height:20px;display:flex;justify-content:space-around;border-top:1.5px solid rgba(255,255,255,.18)}.fsl8 i{width:6px;height:9px;border-radius:0 0 4px 4px;margin-top:1px;opacity:.85}" +
+    ".fsl8 i:nth-child(4n+1){background:#e3343c;box-shadow:0 0 8px #e3343c}.fsl8 i:nth-child(4n+2){background:#f5c542;box-shadow:0 0 8px #f5c542}.fsl8 i:nth-child(4n+3){background:#3fcf8e;box-shadow:0 0 8px #3fcf8e}.fsl8 i:nth-child(4n){background:#5aa7ff;box-shadow:0 0 8px #5aa7ff}" +
+    ".fsx1{position:relative;z-index:1;max-width:58%;color:#fff}.fscd{display:inline-block;font:700 11px -apple-system,system-ui,sans-serif;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--acc) 60%,transparent);margin-bottom:9px}" +
+    ".fsx1 h3{font:italic 700 25px/1.08 Georgia,'Times New Roman',serif;letter-spacing:-.3px;margin:0 0 6px;color:#fff6ea}.fsx1 p{font:500 12.5px/1.35 -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.72);margin:0 0 13px}" +
+    ".fsbt{display:flex;gap:8px}.fsgo{white-space:nowrap;border:0;border-radius:99px;background:var(--acc);color:#fff;font:700 13px -apple-system,system-ui,sans-serif;padding:9px 15px;cursor:pointer}.fsdice{border:1px solid rgba(255,255,255,.25);border-radius:99px;background:rgba(0,0,0,.2);color:#fff;font-size:15px;width:38px;cursor:pointer}" +
+    ".fsfan{position:absolute;right:-6px;top:50%;width:46%;height:76%;transform:translateY(-50%)}" +
+    ".fsfan img{position:absolute;left:50%;top:50%;width:44%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;box-shadow:0 10px 24px rgba(0,0,0,.5);transform:translate(calc(-50% + var(--i) * 34%),-50%) rotate(calc(var(--i) * 6deg));cursor:pointer}" +
+    "html.desk .fest{padding:0 4%}html.desk .fsc{min-height:300px;padding:34px 40px}html.desk .fsx1 h3{font-size:40px}html.desk .fsx1 p{font-size:15px}html.desk .fsfan{width:44%;right:2%}html.desk .fsfan img{width:30%}" +
     ".sbl.fsl{background:rgba(80,200,140,.92);color:#04140b}" +
     "html.desk .fsp{flex-direction:row;flex-wrap:wrap;align-content:flex-start}html.desk .fsbar{width:100%}" +
     "html.desk .fsv{width:auto;flex:1 1 640px;aspect-ratio:auto;height:calc(100vh - 62px)}html.desk .fsdock{flex:0 0 320px;height:calc(100vh - 62px)}" +
@@ -406,7 +430,8 @@
       if (P !== my) return; metaDone = true;
       P.imdb = r.imdb; P.tmdb = r.tmdb; if (!r.tmdb) { P.err = "None of the free servers know this title yet."; if (P.kk) P.srv = "kisskh"; }
       if (t.type === "SHOW") { P.ss = episodes(r.m);
-        var last = EPL[r.imdb]; if (!P.explicit && last) { P.s = last.s; P.e = last.e; } }
+        var last = EPL[r.imdb], cwx = CW[r.imdb];   // the newest of: last episode opened, last episode watched
+        if (!P.explicit) { if (cwx && cwx.s && (!last || cwx.at >= last.at)) { P.s = cwx.s; P.e = cwx.e; } else if (last) { P.s = last.s; P.e = last.e; } } }
       var cw = CW[r.imdb]; if (cw && cw.c > 60 && !cw.fin && (t.type !== "SHOW" || (cw.s === P.s && cw.e === P.e))) P.resume = cw.c;
       if (t.fs && !t.desc && r.m.description) t.desc = r.m.description;
       if (my.started) load(); else if (kkDone) ready();
@@ -577,8 +602,9 @@
     if (!rows || rows.length < 2) return rows;
     if (id === "home" || id === "shows" || id === "movies") {   // Continue watching goes on top even when the switch is off
       var cw = cwList().filter(function (t) { return id === "home" || (id === "shows") === (t.type === "SHOW"); });
-      if (cw.length) rows.splice(id === "home" ? 1 : 0, 0, S.R("Continue watching", cw, null, "free servers", 1, true));
+      if (cw.length) rows.splice(id === "home" ? 1 : 0, 0, S.R("Continue watching", cw, "cw", null, 1, true));
     }
+    if (id === "home") { var fe = fest(); if (fe) rows.splice(Math.min(3, rows.length), 0, S.R(fe.title, fe.items, "fest", null, 1, true)); }
     if (!ON || !LISTS[id]) return rows;
     var hid = S.hiddenSet ? S.hiddenSet() : {}, seen = {}, rnd = seeded(LAUNCH * 131 + hash(id)), add = [];
     if (id === "shows" || id === "home") { var air = airing().filter(function (t) { return !hid[t.id]; }); if (air.length >= 6) add.push(S.R("Airing today", shuffle(air.slice(0, 12), rnd).concat(air.slice(12)), null, "new episodes · watch free", 1, true)); }
@@ -639,6 +665,52 @@
       var tg = b.dataset.srct === "fs" ? page.querySelector(".fstog") : page.querySelector(".sbtog:not(.fstog):not(.nfwtog)"); if (tg) tg.click(); });
     return d;
   }
-  window.VFS = { sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
+  // ---------- Continue watching: wide cards that resume with one tap ----------
+  function cwCard(t) {
+    var x = t._cw || (t.imdb_id && CW[t.imdb_id]) || {}, pct = x.d ? Math.max(3, Math.min(100, x.c / x.d * 100)) : 0, left = x.d ? Math.max(1, Math.round((x.d - x.c) / 60)) : 0;
+    var c = document.createElement("div"); c.className = "cwc"; c.dataset.free = t.id; c.dataset.id = t.id;
+    c.innerHTML = '<div class="cwa"><img decoding="async" loading="lazy" src="' + esc(S.bd(t, "s1440") || S.po(t, "s592") || "") + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' +
+      '<div class="cwg"></div><div class="cwp"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
+      '<div class="cwt"><b>' + esc(t.title) + "</b><small>" + (x.type === "series" ? "S" + x.s + " · E" + x.e + " · " : "") + (left ? left + " min left" : "Resume") + '</small></div>' +
+      '<div class="cwb"><i style="width:' + pct.toFixed(0) + '%"></i></div></div>';
+    return c;
+  }
+  // ---------- seasonal banner (the aggregator's holiday card, Vesper-style) ----------
+  var FESTS = [
+    { k: "xmas", from: [11, 15], to: [12, 31], day: [12, 25], title: "Cozy up for the holidays.", sub: "Warm family films, classics and new favourites to share.", until: "to Christmas", q: "christmas",
+      re: /\b(christmas|xmas|santa|noel|holiday|grinch|mistletoe|sleigh|nutcracker|elf)\b/i, no: /baby reindeer/i, bg: "linear-gradient(135deg,#0d2a1f,#123a2a 55%,#1d2b1a)", acc: "#e3343c", lights: 1 },
+    { k: "nye", from: [1, 1], to: [1, 6], day: [1, 1], title: "A fresh start.", sub: "Big new-year energy: fresh beginnings and fun.", until: "", q: "new year", re: /\b(new year|fresh start|resolution)\b/i, bg: "linear-gradient(135deg,#141a4a,#2a1f5c 60%,#4b2a63)", acc: "#d9b45a" },
+    { k: "val", from: [2, 1], to: [2, 14], day: [2, 14], title: "Fall for something.", sub: "Love stories for two, or just for you.", until: "to Valentine's Day", q: "romance", re: /\b(love|romance|valentine|wedding|in love)\b/i, bg: "linear-gradient(135deg,#3a0f1f,#5a1630 60%,#2a0d1a)", acc: "#ff5c8a" },
+    { k: "hall", from: [10, 1], to: [10, 31], day: [10, 31], title: "Something wicked this way comes.", sub: "Haunted houses, slashers and spooky fun.", until: "to Halloween", q: "horror", re: /\b(halloween|haunt|ghost|witch|zombie|vampire|slasher|possess)/i, bg: "linear-gradient(135deg,#1a0f05,#3a1d06 60%,#140a1f)", acc: "#ff8a1f" }
+  ];
+  var festCache = null;
+  function fest() {
+    if (festCache !== null) return festCache || null;
+    var now = new Date(), md = (now.getMonth() + 1) * 100 + now.getDate();
+    var F = FESTS.filter(function (x) { return md >= x.from[0] * 100 + x.from[1] && md <= x.to[0] * 100 + x.to[1]; })[0];
+    if (!F) { festCache = false; return null; }
+    if (!S.ALL || S.ALL.length < 1000) return null;   // catalog not loaded yet: ask again next time
+    var hid = S.hiddenSet ? S.hiddenSet() : {};
+    var items = S.ALL.filter(function (t) { return !hid[t.id] && t.poster && !(F.no && F.no.test(t.title || "")) && F.re.test((t.title || "") + " " + (t.desc || "")); })
+      .sort(function (a, b) { return (F.re.test(b.title) ? 2 : 0) - (F.re.test(a.title) ? 2 : 0) || ((b.avail || []).length ? 1 : 0) - ((a.avail || []).length ? 1 : 0) || (b.votes || 0) - (a.votes || 0); }).slice(0, 24);
+    if (items.length < 5) { festCache = false; return null; }
+    var day = new Date(now.getFullYear() + (now.getMonth() + 1 > F.day[0] ? 1 : 0), F.day[0] - 1, F.day[1]), left = Math.ceil((day - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
+    festCache = { title: F.title, items: items, F: F, left: left }; return festCache;
+  }
+  function festEl(r) {
+    var fe = fest(), F = fe.F, el = document.createElement("div"); el.className = "row fest"; el._fill = function () {};
+    var fan = fe.items.slice(0, 5);
+    el.innerHTML = '<div class="fsc" style="background:' + F.bg + ';--acc:' + F.acc + '">' + (F.lights ? '<div class="fsl8">' + new Array(18).join("<i></i>") + "</div>" : "") +
+      '<div class="fsx1">' + (fe.left > 0 && F.until ? '<span class="fscd">' + fe.left + (fe.left === 1 ? " day " : " days ") + esc(F.until) + "</span>" : "") +
+      "<h3>" + esc(F.title) + "</h3><p>" + esc(F.sub) + '</p><div class="fsbt"><button class="fsgo" data-fsq="' + esc(F.q) + '">See picks</button><button class="fsdice" data-fsdice aria-label="Surprise me">🎲</button></div></div>' +
+      '<div class="fsfan">' + fan.map(function (t, i) { return '<img data-id="' + esc(t.id) + '" style="--i:' + (i - (fan.length - 1) / 2) + '" loading="lazy" src="' + esc(S.po(t, "s332")) + '" onerror="this.remove()">'; }).join("") + "</div></div>";
+    el.addEventListener("click", function (e) {
+      var q = e.target.closest("[data-fsq]"); if (q) { e.stopPropagation(); if (window.VUI && VUI.go) VUI.go("search", null, q.dataset.fsq); return; }
+      var im = e.target.closest(".fsfan img[data-id]"); if (im) { e.stopPropagation(); if (window.VUI) VUI.open(im.dataset.id); return; }
+      if (e.target.closest("[data-fsdice]")) { e.stopPropagation(); var t = fe.items[Math.floor(Math.random() * fe.items.length)]; if (window.VUI) VUI.open(t.id); }
+    });
+    return el;
+  }
+  window.VFS = { festEl: festEl, cwCard: cwCard, sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
     popped: function () { return close(true); }, open: function () { return !!(el && el.classList.contains("on")); } };
 })();
