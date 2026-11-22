@@ -646,12 +646,13 @@
     var box = h("div", "sbox", G.search + '<input type="search" placeholder="' + esc(SHOLD[MODE]) + '" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="clr">' + G.xc + "</button>");
     page.appendChild(box);
     var ac = h("div", "ac"); box.appendChild(ac);
-    var row1 = h("div", "srow1"), seg = h("div", "seg"), filt = h("div", "sfilt");
+    var row1 = h("div", "srow1"), seg = h("div", "seg"), filt = h("div", "sfilt"), xseg = h("div", "seg xseg");
     function drawFilt() {
+      xseg.innerHTML = '<button data-xs="smart"' + (MODE !== "title" ? ' class="on"' : "") + '>✨ Smart</button><button data-xs="exact"' + (MODE === "title" ? ' class="on"' : "") + ">Exact name</button>";
       seg.innerHTML = [["", "All"], ["MOVIE", "Movies"], ["SHOW", "Shows"]].map(function (k) { return '<button data-sk="' + k[0] + '"' + (KIND === k[0] ? ' class="on"' : "") + ">" + k[1] + "</button>"; }).join("");
       filt.innerHTML = '<span class="sby">Search by</span>' + SMODES.map(function (m) { return '<button class="smode' + (MODE === m[0] ? " on" : "") + '" data-sm="' + m[0] + '">' + m[1] + "</button>"; }).join("");
     }
-    drawFilt(); row1.appendChild(seg); page.appendChild(row1); page.appendChild(filt);
+    drawFilt(); row1.appendChild(xseg); row1.appendChild(seg); page.appendChild(row1); page.appendChild(filt);
     var inp = box.querySelector("input"), chips = h("div", "chips"), body = h("div");
     if (window.VSB) { var sbt = VSB.toggle(function () { run(); }); row1.appendChild(sbt); }
     if (window.VFS) { var fst = VFS.toggle(function () { run(); }); row1.appendChild(fst); }
@@ -807,17 +808,20 @@
       if (!rawOnly && fixedQ !== q2 && S.norm(fixedQ) !== S.norm(q2)) body.appendChild(h("div", "fixq", "Showing results for <b>" + esc(fixedQ) + '</b><button data-raw="' + esc(q) + '">Search “' + esc(q) + "” instead</button>"));
       var useQ = rawOnly ? q2 : fixedQ; rawOnly = false;
       var R;
-      if (MODE === "title") { var bn = S.search(useQ, 60), nq = S.norm(useQ); R = { top: null, titles: bn.titles, similar: [], vibe: [], chips: [], label: useQ };
+      if (MODE === "title") { var bn = S.search(useQ, 60), nq = S.norm(useQ), qwx = nq.split(" ").filter(Boolean);
+        bn.titles = bn.titles.filter(function (x) { var k = " " + S.norm(x.title) + " " + S.norm(x.otitle || "") + " "; return qwx.every(function (w) { return k.indexOf(" " + w) >= 0; }); });   // exact: every word in the name
+        R = { top: null, titles: bn.titles, similar: [], vibe: [], chips: [], label: useQ };
         var ti = bn.titles.filter(function (x) { var k = S.norm(x.title); return k === nq || k.indexOf(nq) === 0; })[0]; if (ti) { R.top = ti; R.titles = bn.titles.filter(function (x) { return x !== ti; }); R.similar = S.similar(ti, 20).filter(function (x) { return (x.avail || []).length; }); } }
       else R = smartSearch(useQ);
       R = onlyType(R, ty);
       S.prefetchFull([R.top].concat(R.titles || []));
       var P = parseQuery(useQ); P.type = ty;
       if (window.VNW && (MODE === "all" || MODE === "title")) VNW.searchInto(body, useQ, R);
-      if (window.VFS && VFS.on()) { var MDq = moodsOf(useQ); VFS.searchInto(body, useQ, R, rowEl, { type: ty, P: MDq.moods.length ? Object.assign(parseQuery(MDq.rest), { type: ty || parseQuery(MDq.rest).type }) : P, moods: MDq.moods, topics: R.topics || [], label: R.moodLabel || (P.structured ? describe(P, true) : "") }); }
+      if (window.VFS && VFS.on() && MODE === "title") VFS.searchInto(body, useQ, R, rowEl, { type: ty, P: { genres: [], rest: [], structured: false }, moods: [], topics: [], exact: true });
+      else if (window.VFS && VFS.on()) { var MDq = moodsOf(useQ); VFS.searchInto(body, useQ, R, rowEl, { type: ty, P: MDq.moods.length ? Object.assign(parseQuery(MDq.rest), { type: ty || parseQuery(MDq.rest).type }) : P, moods: MDq.moods, topics: R.topics || [], label: R.moodLabel || (P.structured ? describe(P, true) : "") }); }
       if (window.VSB && VSB.on()) {
         VSB.searchInto(body, useQ, R, rowEl, { type: ty });
-        if (P.structured && !P.who) { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
+        if (P.structured && !P.who && MODE !== "title") { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
           if (!VSB.browse(P, function (items, done) { if (my === stok) lb.set(items, done); })) lb.el().remove(); }
       }
       // "Anything" mode: a name that's a person or a studio gets their filmography on top
@@ -839,7 +843,7 @@
         return;
       }
       chips.innerHTML = chipsHTML(R.chips);
-      if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", "<b>No matches" + (ty ? " in " + (ty === "MOVIE" ? "movies" : "shows") : "") + "</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
+      if (!R.top && !R.titles.length && !R.vibe.length) { body.appendChild(h("div", "empty", MODE === "title" ? "<b>No title with that name on your apps</b>Check ShowBox and the free servers above, or switch to ✨ Smart." : "<b>No matches" + (ty ? " in " + (ty === "MOVIE" ? "movies" : "shows") : "") + "</b>Try a different spelling, an actor, a vibe like “rainy” or an era like “2010s”.")); return; }
       if (R.top) {
         var tp = h("div", "toprez"); tp.dataset.id = R.top.id; var ta = S.pickApp(R.top);
         tp.innerHTML = '<div class="art"><img src="' + S.bd(R.top, "s1440") + '"><div class="g"></div>' + (ta ? '<img class="lg" src="' + LOGO[ta] + '">' : "") + '</div><div class="tx"><small>Top result</small><b>' + esc(R.top.title) +
@@ -958,6 +962,7 @@
     body.addEventListener("click", saveQ, true);
     box.querySelector(".clr").addEventListener("click", function () { inp.value = ""; PICK = null; acHide(); run(); inp.focus(); });
     page.addEventListener("click", function (e) {
+      var xs = e.target.closest("[data-xs]"); if (xs) { setMode(xs.dataset.xs === "exact" ? "title" : "all"); run(); return; }
       var sk = e.target.closest("[data-sk]"); if (sk) { KIND = sk.dataset.sk; setPref("skind", KIND); drawFilt(); run(); return; }
       var sm = e.target.closest("[data-sm]"); if (sm) { setMode(sm.dataset.sm); run(); if (!inp.value) inp.focus(); return; }
       var ss = e.target.closest("[data-ss]"); if (ss) { SORT = ss.dataset.ss; setPref("ssort", SORT); run(); return; }

@@ -660,7 +660,7 @@
     var qn = norm(q); if (SQ[qn]) return cb(SQ[qn]);
     Promise.all(["movie", "series"].map(function (ty) { return get(CM + "/catalog/" + ty + "/top/search=" + encodeURIComponent(q) + ".json").then(function (j) { return j.metas || []; }).catch(function () { return []; }); }))
       .then(function (r) {
-        var all = r[0].map(function (m) { m.type = "movie"; return m; }).concat(r[1].map(function (m) { m.type = "series"; return m; }));
+        var all = r[0].map(function (m, i) { m.type = "movie"; m._r = i; return m; }).concat(r[1].map(function (m, i) { m.type = "series"; m._r = i; return m; }));
         // Cinemeta's own order is by popularity — keep it, nudge by how well the name matches, and lift what's on your apps
         function score(m, i) { var k = norm(m.name), cat = index()[m.id];
           return (k === qn ? 12 : k.indexOf(qn) === 0 ? 9 : (" " + k).indexOf(" " + qn) >= 0 ? 5 : 0) + (cat && (cat.avail || []).length ? 25 : 0) - i * 4; }
@@ -716,8 +716,10 @@
       if (!gname && !P.year && !P.newish && !P.era) pages.concat(topics.length && ty === "movie" ? [100] : []).forEach(function (sk) { jobs.push(poolPage(ty, "top", "", sk)); });
     });
     // plain words (titles) and the topic's look-alike words ("college" → university, campus…)
-    var words = (P.rest || []).join(" ");
-    if (!structured || words) jobs.push(new Promise(function (ok) { search(structured ? words : q, ok); }));
+    // always search the words exactly as typed too: "family matters" is a title, not just the Family genre
+    var words = (P.rest || []).join(" "), TITLEQ = {};
+    jobs.push(new Promise(function (ok) { search(q, function (l) { (l || []).forEach(function (m) { if (!TITLEQ[m.id]) TITLEQ[m.id] = (m._r || 0) + 1; }); ok(l); }); }));
+    if (structured && words && norm(words) !== norm(q)) jobs.push(new Promise(function (ok) { search(words, ok); }));
     topics.slice(0, 1).forEach(function (re) { re.source.replace(/^\\b\(\?:/, "").replace(/\)$/, "").split("|").slice(0, 4).forEach(function (w) { w = w.replace(/\\/g, ""); if (w.length >= 4 && w !== words) jobs.push(new Promise(function (ok) { search(w, ok); })); }); });
     var ccNames = (P.cc || []).map(function (c) { return CCN[c]; }).filter(Boolean);
     var kkJob = (P.cc || []).some(function (c) { return ASIA[c]; }) ? kkIndex() : Promise.resolve([]);   // KissKH can't judge moods, but its newest fit "feel good korean drama" well enough after the scored ones
@@ -741,7 +743,15 @@
         return { m: m, f: f, s: f * 2 + (+m.imdbRating || 6) * 0.8 + (P.newish ? (m.year || 0) - Y : 0) * 2 }; })
         .filter(function (x) { return !moods.length || x.f >= 3; });
       if (structured || topics.length) scored.sort(function (a, b) { return b.s - a.s; });
-      var items = scored.map(function (x) { return T(x.m); }).filter(Boolean);
+      if (opt.exact) { var qx = norm(q).split(" ").filter(Boolean); scored = scored.filter(function (x) { var k = " " + norm(x.m.name) + " "; return qx.every(function (w) { return k.indexOf(" " + w) >= 0; }); }); }
+      var qw = norm(q).split(" ").filter(function (w) { return w.length > 1; }), titleHits = [];
+      // Cinemeta's own order for each type (it knows "Family Plan" is the Korean "Family Matters"), films and series side by side
+      all.forEach(function (m) { if (!TITLEQ[m.id]) return; var k = " " + norm(m.name) + " ", fullHit = qw.every(function (w) { return k.indexOf(" " + w) >= 0; });
+        if (fullHit || (!opt.exact && TITLEQ[m.id] <= 6)) titleHits.push(m); });
+      titleHits.sort(function (a, b) { return TITLEQ[a.id] - TITLEQ[b.id] || (a.type === "series" ? -1 : 1); });
+      var hitIds = {}; titleHits.forEach(function (m) { hitIds[m.id] = 1; });
+      var items = titleHits.filter(function (m) { return !P.type || (P.type === "SHOW") === (m.type === "series"); }).map(T).filter(Boolean)
+        .concat(scored.filter(function (x) { return !hitIds[x.m.id]; }).map(function (x) { return T(x.m); }).filter(Boolean));
       // KissKH for Korean / Japanese / Chinese / Thai searches: newest first, by type and year
       var kk = (r[1] || []).filter(function (k) { return P.cc.indexOf(k.cc) >= 0 && (!P.type || (P.type === "SHOW") === (k.ty === "S" || k.ty === "A")) &&
         (!P.year || k.y === P.year) && (!P.era || (k.y >= P.era[0] && k.y <= P.era[1])) && (!P.newish || !k.y || k.y >= Y - 1); }).slice(0, 24);

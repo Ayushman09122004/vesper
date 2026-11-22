@@ -895,3 +895,7 @@ html.desk .rail{gap:12px;}
 html.desk .pc{transition:transform .38s var(--e),box-shadow .38s var(--e);}
 html.desk .cwa{transition:transform .38s var(--e),box-shadow .38s var(--e);}
 html.desk .cwc:hover .cwa{transform:translateY(-4px);box-shadow:0 16px 34px rgba(0,0,0,.55),0 0 0 2px rgba(255,255,255,.8);}
+
+/* v53 — Smart / Exact search switch */
+.xseg button{white-space:nowrap;}
+.xseg button.on{background:#fff;color:#000;}
