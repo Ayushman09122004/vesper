@@ -160,6 +160,7 @@
     ".fssubs button,.fsfile{height:40px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;padding:0 13px;font:600 13.5px -apple-system,system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center}" +
     ".fssync{display:flex;align-items:center;gap:10px;margin-top:8px}.fssync button{height:34px;border-radius:9px;border:0;background:rgba(255,255,255,.1);color:#fff;padding:0 12px;font:600 13px -apple-system,system-ui,sans-serif;cursor:pointer}.fssync span{font:600 13px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.7);min-width:64px;text-align:center}" +
     ".cwnew{position:absolute;left:10px;top:10px;font:800 9.5px -apple-system,system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;background:#e50914;color:#fff;padding:3px 7px;border-radius:4px}" +
+    ".fstag{margin-left:9px;font:800 10.5px -apple-system,system-ui,sans-serif;letter-spacing:.04em;padding:3px 7px;border-radius:5px;background:#3fcf8e;color:#04140b}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
     ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
     ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
@@ -497,6 +498,7 @@
         if (!P.explicit) { if (cwx && cwx.s && (!last || cwx.at >= last.at)) { P.s = cwx.s; P.e = cwx.e; } else if (last) { P.s = last.s; P.e = last.e; } } }
       var cw = CW[r.imdb]; if (cw && cw.c > 60 && !cw.fin && (t.type !== "SHOW" || (cw.s === P.s && cw.e === P.e))) P.resume = cw.c;
       if (t.fs && !t.desc && r.m.description) t.desc = r.m.description;
+      P.foreign = foreignOf(t, r.m);
       if (my.started) load(); else if (kkDone) ready();
     }).catch(function () { if (P !== my) return; metaDone = true; P.err = "Couldn't find this title on the free servers."; if (P.kk) P.srv = "kisskh"; if (my.started) load(); else if (kkDone) ready(); });
   }
@@ -506,6 +508,12 @@
   // pick is remembered. Your own files are kept per title/episode.
   var SUB = { lang: ld("sublang", "off"), off: 0, cues: null, list: null, key: "", src: "", busy: 0, ownName: "" }, subT = null;
   var RZ = "https://rezesubs.com";
+  var ENC = { US: 1, GB: 1, CA: 1, AU: 1, IE: 1, NZ: 1 };
+  function foreignOf(t, m) {
+    var c = (t.countries || []).slice(); if (!c.length && m && m.country) c = String(m.country).split(/,\s*/).map(function (n) { for (var k in CCN) if (CCN[k] === n) return k; return n === "USA" ? "US" : n === "UK" ? "GB" : "?"; });
+    if (!c.length && P && P.kk && P.kk.cc) c = [P.kk.cc];
+    return c.length > 0 && !c.some(function (x) { return ENC[x]; });
+  }
   function subKey() { return P ? (P.imdb || P.t.id) + (P.t.type === "SHOW" ? ":" + P.s + ":" + P.e : "") : ""; }
   function parseSubs(txt) {
     var out = [], blocks = String(txt || "").replace(/\r/g, "").split(/\n\s*\n/);
@@ -526,13 +534,16 @@
     out.sort(function (a, b) { return (b === "english") - (a === "english") || (b === "korean") - (a === "korean") || a.localeCompare(b); }); return out; }
   function subFor() {   // a new title/episode/server: load the remembered choice
     if (!P) return; var k = subKey(); if (SUB.key === k && SUB.cues) { subTick(); return; }
-    SUB.key = k; SUB.cues = null; SUB.list = null; SUB.src = ""; SUB.off = +ld("suboff:" + (P.imdb || P.t.id), 0) || 0;
+    SUB.key = k; SUB.cues = null; SUB.list = null; SUB.src = ""; SUB.lang = ld("sublang", "off");   // an automatic English never carries over SUB.off = +ld("suboff:" + (P.imdb || P.t.id), 0) || 0;
     var own = ld("subown:" + k, null);
     if (own && own.c) { SUB.cues = own.c; SUB.src = "own"; SUB.ownName = own.n || "your file"; subStart(); dock(); return; }
-    subList(function (list) { SUB.list = list; if (SUB.lang !== "off") subUse(SUB.lang); else dock(); });
+    subList(function (list) { SUB.list = list;
+      var auto = SUB.lang === "off" && P && P.foreign && !ld("subno:" + (P.imdb || P.t.id), 0) && (list || []).some(function (s) { return s.lang === "english"; });
+      if (SUB.lang !== "off") subUse(SUB.lang); else if (auto) subUse("english", 0, true); else dock(); });
   }
-  function subUse(lang, nth) {
-    SUB.lang = lang; sv("sublang", lang);
+  function subUse(lang, nth, auto) {
+    SUB.lang = lang; if (!auto) sv("sublang", lang);
+    if (lang === "off" && P && !auto) sv("subno:" + (P.imdb || P.t.id), 1);
     if (lang === "off") { SUB.cues = null; SUB.src = ""; subDraw(""); dock(); return; }
     var pick = (SUB.list || []).filter(function (s) { return s.lang === lang; })[nth || 0];
     if (!pick) { SUB.cues = null; SUB.src = "none"; subDraw(""); dock(); return; }
@@ -599,7 +610,10 @@
   // ---------- title page / hover button ----------
   function btn(t, big) {
     if (!can(t)) return "";
-    return '<button class="btn ' + (big ? "play big free" : "wide free") + '" data-free="' + esc(t.id) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Watch free</button>';
+    var ic = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    if (big) { var x = t.imdb_id && CW[t.imdb_id], res = x && x.d ? (x.type === "series" ? "S" + x.s + " · E" + x.e : clock(x.c)) : "";
+      return '<button class="btn play big free" data-free="' + esc(t.id) + '">' + ic + (res ? "Resume" : "Play") + '<span class="fstag">' + (res ? esc(res) + " · " : "") + "FREE</span></button>"; }
+    return '<button class="btn wide free" data-free="' + esc(t.id) + '">' + ic + "Watch free</button>";
   }
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-free]"); if (!b) return;
@@ -970,6 +984,6 @@
     var hat = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 8" shape-rendering="crispEdges"><rect x="3" y="2" width="4" height="1" fill="#d42a35"/><rect x="2" y="3" width="6" height="1" fill="#d42a35"/><rect x="4" y="1" width="3" height="1" fill="#d42a35"/><rect x="6" y="0" width="2" height="1" fill="#d42a35"/><rect x="8" y="0" width="2" height="2" fill="#fff"/><rect x="1" y="4" width="8" height="2" fill="#fff"/></svg>');
     var st = document.createElement("style"); st.textContent = ".hrow .logo.pix{overflow:visible}.hrow{position:relative}.hrow .logo.pix+h1{position:relative}.hrow::before{content:'';position:absolute;left:3px;top:-3px;width:20px;height:16px;background:url(\"" + hat + "\") no-repeat center/contain;image-rendering:pixelated;z-index:2;pointer-events:none;transform:rotate(-14deg)}";
     document.head.appendChild(st); } })();
-  window.VFS = { festEl: festEl, cwCard: cwCard, sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
+  window.VFS = { list: function (key) { return list(key); }, festEl: festEl, cwCard: cwCard, sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
     popped: function () { return close(true); }, open: function () { return !!(el && el.classList.contains("on")); } };
 })();

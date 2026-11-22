@@ -166,7 +166,7 @@
         ? '<button class="chip x" data-go="home">' + G.x + '</button><button class="chip on" data-sheet="' + (sec === "time" ? "time" : sec.indexOf("app:") === 0 ? "apps" : CATS.some(function (c) { return c[0] === sec; }) ? "cats" : "") + '">' +
           (sec.indexOf("app:") === 0 ? '<img src="' + LOGO[sec.slice(4)] + '">' : sec === "time" ? G.clock : "") + esc(sec === "time" ? tLabel(S.pref("tmax", 60)) : SECT_NAMES[sec] || "") + (sec === "shows" || sec === "movies" ? "" : G.caret) + "</button>" +
           (sec === "shows" ? '<button class="chip" data-go="movies">Films</button>' : sec === "movies" ? '<button class="chip" data-go="shows">Series</button>' : "")
-        : '<button class="chip" data-sheet="time">' + G.clock + 'Time</button><button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-go="throwback">Throwback</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
+        : '<button class="chip" data-sheet="time">' + G.clock + 'Time</button><button class="chip" data-vfeed>' + G.play + 'Trailers</button><button class="chip" data-go="shows">Series</button><button class="chip" data-go="movies">Films</button><button class="chip" data-go="throwback">Throwback</button><button class="chip" data-sheet="apps">Your Apps' + G.caret + '</button><button class="chip" data-sheet="cats">Categories' + G.caret + "</button>";
       if (sec === "throwback") { var ce = S.pref("era", "e10");
         chips = '<button class="chip x" data-go="home">' + G.x + "</button>" + ERAS.map(function (x) { return '<button class="chip era' + (x.k === ce ? " on" : "") + '" data-era="' + x.k + '">' + x.label + "</button>"; }).join(""); }
       var title = inSec ? esc(SECT_NAMES[sec] || "") : p ? "For " + esc(p.name) : "Home";
@@ -1330,6 +1330,7 @@
       '<button class="mrow" data-sheet="me"><i style="--c:#e50914">' + G.play + "</i><span>Play on first<small>" + (fav === "auto" ? "Best available app" : LABEL[fav]) + "</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-sheet="people"><i style="--c:#8f7cff">' + G.person + "</i><span>Profiles<small>" + (many ? S.profiles().length + " people" : "Add family members") + "</small></span>" + G.r + "</button>" +
       syncRow() +
+      '<button class="mrow" data-nfimport><i style="--c:#e50914">' + G.film + "</i><span>Import Netflix history<small>" + (window.VX && VX.nfLast() ? VX.nfLast().matched + " titles marked as watched" : "Mark what you've watched · sharpen your picks") + "</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-qr><i style="--c:#f3a46b">' + G.heart + "</i><span>Quick Rate<small>Swipe 20 posters, sharpen your picks</small></span>" + G.r + "</button>" +
       '<button class="mrow" data-together><i style="--c:#22a06b">' + G.people + "</i><span>Watch together<small>What you'll both enjoy</small></span>" + G.r + "</button>";
     page.appendChild(opts);
