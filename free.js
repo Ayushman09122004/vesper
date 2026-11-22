@@ -153,6 +153,13 @@
     ".fsp.pin .fsv{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;aspect-ratio:auto!important;transform:none!important;margin:0!important;background:#000!important;z-index:2147483000!important}" +
     ".fsv.kk{overflow:hidden;background:#000}.fsv.kk iframe{inset:auto;position:absolute}" +
     "html.desk .fsp:not(.max) .fsv.kk{height:auto;aspect-ratio:16/9;align-self:flex-start}" +
+    ".fssub{position:absolute;left:6%;right:6%;bottom:9%;z-index:4;text-align:center;pointer-events:none;opacity:0;transition:opacity .15s;color:#fff;font:600 clamp(15px,4.2vw,30px)/1.3 -apple-system,system-ui,sans-serif;text-shadow:0 0 3px #000,0 1px 3px #000,0 0 10px rgba(0,0,0,.8)}" +
+    ".fsp:not(.max):not(.pin) .fssub{font-size:clamp(13px,3.6vw,22px)}" +
+    ".fsv:has(.fsauto) .fssub{bottom:calc(9% + 58px)}" +
+    ".fssubs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.fssubs select{flex:1;min-width:130px;height:40px;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;border:0;padding:0 10px;font:600 14px -apple-system,system-ui,sans-serif}" +
+    ".fssubs button,.fsfile{height:40px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;padding:0 13px;font:600 13.5px -apple-system,system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center}" +
+    ".fssync{display:flex;align-items:center;gap:10px;margin-top:8px}.fssync button{height:34px;border-radius:9px;border:0;background:rgba(255,255,255,.1);color:#fff;padding:0 12px;font:600 13px -apple-system,system-ui,sans-serif;cursor:pointer}.fssync span{font:600 13px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.7);min-width:64px;text-align:center}" +
+    ".cwnew{position:absolute;left:10px;top:10px;font:800 9.5px -apple-system,system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;background:#e50914;color:#fff;padding:3px 7px;border-radius:4px}" +
     ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
     ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
     ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
@@ -254,11 +261,17 @@
       if (b.hasAttribute("data-fsads")) { P.allowAds = 1; var na = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (na) { P.srv = na.k; P.auto = 1; load(); } return; }
       if (b.hasAttribute("data-fsadsw")) { NOADS = !NOADS; sv("noads", NOADS); return dock(); }
       if (b.hasAttribute("data-fsretry")) { P.bad = {}; P.auto = 1; P.srv = order()[0].k; return load(); }
+      if (b.dataset.fsoff) { SUB.off = Math.round((SUB.off + +b.dataset.fsoff) * 10) / 10; sv("suboff:" + (P.imdb || P.t.id), SUB.off); subTick(); return dock(); }
+      if (b.hasAttribute("data-fssn")) { var n = (SUB.list || []).filter(function (s) { return s.lang === SUB.lang; }).length; return subUse(SUB.lang, ((SUB.nth || 0) + 1) % n); }
+      if (b.hasAttribute("data-fsnow")) { if (UN) clearInterval(UN.tick); banner(null); return step(1); }
+      if (b.hasAttribute("data-fsuncancel")) { if (UN) { clearInterval(UN.tick); UN.left = 0; } banner(null); return; }
       if (b.hasAttribute("data-fsprev")) return step(-1);
       if (b.hasAttribute("data-fsnext")) return step(1);
     });
     el.addEventListener("change", function (e) {
       if (e.target.matches("[data-fss]")) { var s = +e.target.value, ss = P.ss.filter(function (x) { return x.n === s; })[0]; P.s = s; P.e = ss ? ss.eps[0].e : 1; P.bad = {}; P.auto = 1; load(); }
+      if (e.target.matches("[data-fssl]")) { var v = e.target.value; if (v === "own") return; if (SUB.src === "own") { try { LS.removeItem("vesper.fs.subown:" + subKey()); } catch (x) {} } return subUse(v); }
+      if (e.target.matches("[data-fsfile]")) return subFile(e.target.files && e.target.files[0]);
       if (e.target.matches("[data-fse]")) { P.e = +e.target.value; P.bad = {}; P.auto = 1; load(); }
     });
     window.addEventListener("resize", function () { if (el.classList.contains("max")) maxi(true); else fitKK(); });
@@ -299,6 +312,7 @@
       return '<em class="fsst">' + (s ? "starts ~" + s + "s" : "") + (s && sm ? " · " : "") + sm + "</em>"; }
     function cell(x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + ">" + (best && best.k === x.k ? '<span class="fsbest">Best for you</span>' : "") + "<b>" + x.n + (x.ad === 0 ? ' <span class="fsok">✓</span>' : x.ad === "lock" ? ' <span class="fslk">🔒</span>' : "") + "</b><small>" + x.d + "</small>" + stat(x.k) + "</button>"; }
     var all = order(true), clean = all.filter(function (x) { return x.ad !== 1; }), ads = all.filter(function (x) { return x.ad === 1; });
+    html += subDock();
     html += '<div class="fsh">Ad-free servers</div><div class="fsrv">' + clean.map(cell).join("") + "</div>" +
       '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
       (NOADS && !(P && P.allowAds) ? '<p class="fsnote" style="margin-top:-2px">Vesper only tries these when no ad-free server has the title. You can still tap one.</p>' : "") +
@@ -340,7 +354,7 @@
     f.onload = function () { msg.textContent = ""; if (sv0.kk && W && W.f === f && !W.done) settle(true); };
     box.insertBefore(f, box.firstChild); fitKK();
     if (tv && P.imdb) { EPL[P.imdb] = { s: P.s, e: P.e, at: Date.now() }; var ks = Object.keys(EPL); if (ks.length > 300) delete EPL[ks[0]]; sv("ep", EPL); }
-    watch(sv0, f);
+    watch(sv0, f); subFor();
     if (P.resume) { var rs = P.resume; P.resume = 0; setTimeout(function () { if (!W || W.tick) return; banner("<span>Last time you stopped at <b>" + clock(rs) + "</b> — skip there in the player.</span>"); setTimeout(function () { var b = el && el.querySelector(".fsauto"); if (b && /stopped at/.test(b.textContent)) banner(null); }, 9000); }, 1500); }
   }
   // ---------- Continue watching: where you stopped, per title (from the players' own time reports) ----------
@@ -415,11 +429,12 @@
       if (ev.event === "play" || ev.event === "playing" || +ev.duration > 0 || +ev.currentTime > 0.3) { if (!W.done) settle(true); }
       if (+ev.currentTime > 0 && +ev.duration > 0) prog(+ev.currentTime, +ev.duration);
       flow(ev);
-      if (ev.event === "ended" && P.t.type === "SHOW" && W.done) { step(1); }
+      if (ev.event === "ended" && P.t.type === "SHOW" && W.done && !(UN && UN.key === subKey() && UN.left <= 0)) { if (UN) clearInterval(UN.tick); banner(null); step(1); }
       return;
     }
     if (d.event === "status" && +d.data >= 400) return fail("status");
-    if (/^vidrift:(unpaused|playing|time)/.test(d.type || "")) return settle(true);
+    if (d.type === "vidrift:progress" || d.type === "vidrift:unpaused") { if (+d.currentTime >= 0) flow({ event: "timeupdate", currentTime: +d.currentTime }); }
+    if (/^vidrift:(unpaused|playing|time|progress)/.test(d.type || "")) { if (!W.done) settle(true); return; }
   });
   // Smoothness: while the player says it's playing, its time should move ~1s per second. If it stops moving (no
   // pause, no end) the stream is frozen: that's counted against the server, and after 15s Vesper offers to switch.
@@ -431,7 +446,21 @@
     if (e === "play" || e === "playing") { FL.play = true; FL.at = now; return; }
     if (e === "timeupdate") { var t = +ev.currentTime || 0;
       if (t > FL.t + 0.05 && t - FL.t < 20) { var h = hOf(W.k); h.watch += Math.min(t - FL.t, (now - FL.at) / 1000 + 1); if (now - FL.at > 4000) h.stall += (now - FL.at) / 1000 - (t - FL.t); hSave(); FL.play = true; }
-      FL.t = t; FL.at = now; if (FL.offered) { FL.offered = 0; banner(null); } }
+      FL.t = t; FL.at = now; if (FL.offered) { FL.offered = 0; banner(null); }
+      if (+ev.duration > 0) upNext(t, +ev.duration); }
+  }
+  // Up Next: the last 25 seconds of an episode show the next one, with a 10-second countdown
+  var UN = null;
+  function nextEp() { var flat = []; (P.ss || []).forEach(function (s) { s.eps.forEach(function (x) { flat.push(x); }); });
+    var i = flat.findIndex(function (x) { return x.s === P.s && x.e === P.e; }); return i >= 0 ? flat[i + 1] || null : null; }
+  function upNext(t, d) {
+    if (!P || P.t.type !== "SHOW" || d - t > 25 || d < 300) return;
+    var key = subKey(); if (UN && UN.key === key) return;
+    var nx = nextEp(); if (!nx) return;
+    UN = { key: key, left: 10 };
+    function draw() { banner('<span>Next: <b>S' + nx.s + " · E" + nx.e + "</b> " + esc(nx.title || "") + ' — in ' + UN.left + 's</span><button data-fsnow>Play now</button><button class="g" data-fsuncancel>Cancel</button>'); }
+    draw(); UN.tick = setInterval(function () { if (!UN || UN.key !== key || !P || subKey() !== key) return clearInterval(UN && UN.tick);
+      if (--UN.left <= 0) { clearInterval(UN.tick); banner(null); step(1); } else draw(); }, 1000);
   }
   setInterval(function () {   // frozen stream check
     if (!FL || !W || !P || !FL.play || W.f !== FL.f) return;
@@ -472,9 +501,97 @@
     }).catch(function () { if (P !== my) return; metaDone = true; P.err = "Couldn't find this title on the free servers."; if (P.kk) P.srv = "kisskh"; if (my.started) load(); else if (kkDone) ready(); });
   }
   function msgSet(s) { var m = el.querySelector(".fsmsg"); if (m) m.textContent = s; var o = el.querySelector(".fsv iframe"); if (o) o.remove(); el.querySelector(".fst small").textContent = ""; el.querySelector(".fsdock").innerHTML = ""; }
+  // ---------- subtitles over any server that reports its time (rezesubs.com by TMDB id, or your own .srt/.vtt) ----------
+  // Shown in Vesper's own layer over the player (works in full screen too). Off by default; the language you
+  // pick is remembered. Your own files are kept per title/episode.
+  var SUB = { lang: ld("sublang", "off"), off: 0, cues: null, list: null, key: "", src: "", busy: 0, ownName: "" }, subT = null;
+  var RZ = "https://rezesubs.com";
+  function subKey() { return P ? (P.imdb || P.t.id) + (P.t.type === "SHOW" ? ":" + P.s + ":" + P.e : "") : ""; }
+  function parseSubs(txt) {
+    var out = [], blocks = String(txt || "").replace(/\r/g, "").split(/\n\s*\n/);
+    function ts(s) { var m = /(?:(\d+):)?(\d+):(\d+)[.,](\d+)/.exec(s); return m ? (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]) + (+(m[4] + "00").slice(0, 3)) / 1000 : null; }
+    blocks.forEach(function (b) { var lines = b.split("\n"), i = lines.findIndex(function (l) { return l.indexOf("-->") >= 0; }); if (i < 0) return;
+      var id = i > 0 ? lines[i - 1] : "", p = lines[i].split("-->"), a = ts(p[0]), z = ts(p[1]); if (a == null || z == null) return;
+      var text = lines.slice(i + 1).join("\n").replace(/<(?!\/?i>)[^>]+>/g, "").replace(/\{[^}]*\}/g, "").trim();
+      if (!text || /^ad[-_]/i.test(id) || /visit |www\.|https?:|\.(lol|com|net|org|xyz)\b|subtitles? by|opensubtitles|subscene/i.test(text)) return;
+      out.push({ a: a, b: z, t: text }); });
+    return out.sort(function (x, y) { return x.a - y.a; });
+  }
+  function subList(cb) {   // what rezesubs has for this title / episode
+    if (!P || !P.tmdb) return cb(null);
+    var u = RZ + "/data/subs/" + (P.t.type === "SHOW" ? "tv/" + P.tmdb + "/" + P.s + "/" + P.e : "movie/" + P.tmdb), k = subKey();
+    get(u, 10000).then(function (j) { if (subKey() !== k) return; cb((j && j.subtitles) || []); }).catch(function () { cb([]); });
+  }
+  function subLangs(list) { var seen = {}, out = []; (list || []).forEach(function (s) { if (!seen[s.lang]) { seen[s.lang] = 1; out.push(s.lang); } });
+    out.sort(function (a, b) { return (b === "english") - (a === "english") || (b === "korean") - (a === "korean") || a.localeCompare(b); }); return out; }
+  function subFor() {   // a new title/episode/server: load the remembered choice
+    if (!P) return; var k = subKey(); if (SUB.key === k && SUB.cues) { subTick(); return; }
+    SUB.key = k; SUB.cues = null; SUB.list = null; SUB.src = ""; SUB.off = +ld("suboff:" + (P.imdb || P.t.id), 0) || 0;
+    var own = ld("subown:" + k, null);
+    if (own && own.c) { SUB.cues = own.c; SUB.src = "own"; SUB.ownName = own.n || "your file"; subStart(); dock(); return; }
+    subList(function (list) { SUB.list = list; if (SUB.lang !== "off") subUse(SUB.lang); else dock(); });
+  }
+  function subUse(lang, nth) {
+    SUB.lang = lang; sv("sublang", lang);
+    if (lang === "off") { SUB.cues = null; SUB.src = ""; subDraw(""); dock(); return; }
+    var pick = (SUB.list || []).filter(function (s) { return s.lang === lang; })[nth || 0];
+    if (!pick) { SUB.cues = null; SUB.src = "none"; subDraw(""); dock(); return; }
+    var k = subKey(); SUB.busy = 1; dock();
+    fetch(RZ + pick.url).then(function (r) { return r.text(); }).then(function (txt) { if (subKey() !== k) return; SUB.busy = 0; SUB.cues = parseSubs(txt); SUB.src = lang + (nth ? " " + (nth + 1) : ""); SUB.nth = nth || 0; subStart(); dock(); })
+      .catch(function () { SUB.busy = 0; SUB.src = "none"; dock(); });
+  }
+  function subStart() { clearInterval(subT); subT = setInterval(subTick, 200); subTick(); }
+  function subNow() { if (!FL || !W || FL.f !== W.f) return null; return FL.t + (FL.play ? Math.min(2, (Date.now() - FL.at) / 1000) : 0); }
+  function subTick() {
+    if (!P || !SUB.cues || !SUB.cues.length) return subDraw("");
+    var t = subNow(); if (t == null) return subDraw(""); t -= SUB.off;
+    var c = SUB.cues, lo = 0, hi = c.length - 1, hit = null;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (c[mid].b < t) lo = mid + 1; else if (c[mid].a > t) hi = mid - 1; else { hit = c[mid]; break; } }
+    subDraw(hit ? hit.t : "");
+  }
+  function subDraw(text) {
+    var box = el && el.querySelector(".fsv"); if (!box) return; var s = box.querySelector(".fssub");
+    if (!text) { if (s) s.style.opacity = 0; return; }
+    if (!s) { s = document.createElement("div"); s.className = "fssub"; box.appendChild(s); }
+    if (s._t !== text) { s._t = text; s.innerHTML = esc(text).replace(/&lt;(\/?)i&gt;/g, "<$1i>").replace(/\n/g, "<br>"); }
+    s.style.opacity = 1;
+  }
+  function subDock() {
+    if (!P) return ""; var talks = !(SERVERS.filter(function (x) { return x.k === P.srv; })[0] || {}).quiet && P.srv !== "kisskh";
+    var langs = subLangs(SUB.list), cur = SUB.lang, nEn = (SUB.list || []).filter(function (s) { return s.lang === cur; }).length;
+    var h = '<div class="fsh">Subtitles</div><div class="fssubs"><select data-fssl><option value="off"' + (cur === "off" && SUB.src !== "own" ? " selected" : "") + ">Off</option>" +
+      langs.map(function (l) { return '<option value="' + esc(l) + '"' + (cur === l && SUB.src !== "own" ? " selected" : "") + ">" + esc(l.charAt(0).toUpperCase() + l.slice(1)) + "</option>"; }).join("") +
+      (SUB.src === "own" ? '<option value="own" selected>' + esc(SUB.ownName) + "</option>" : "") + "</select>" +
+      (nEn > 1 && SUB.src !== "own" && cur !== "off" ? '<button data-fssn>Version ' + ((SUB.nth || 0) + 1) + "/" + nEn + "</button>" : "") +
+      '<label class="fsfile">Add file<input type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" data-fsfile hidden></label></div>' +
+      (SUB.cues ? '<div class="fssync"><button data-fsoff="-0.5">− 0.5s</button><span>' + (SUB.off ? (SUB.off > 0 ? "+" : "") + SUB.off.toFixed(1) + "s" : "In sync") + '</span><button data-fsoff="0.5">+ 0.5s</button></div>' : "") +
+      '<p class="fsnote" style="margin:4px 2px 14px">' + (SUB.busy ? "Loading subtitles…" : SUB.src === "none" ? "No " + esc(cur) + " subtitles found for this one." : !talks ? "This server doesn’t share its time, so Vesper’s subtitles can’t follow it — use its own CC, or pick VidQueen, VidGold, Cinezo, VidRock or VidFast." :
+        SUB.cues ? SUB.cues.length + " lines · shown over the picture, in full screen too. If they run early or late, nudge them." : (SUB.list && SUB.list.length ? subLangs(SUB.list).length + " languages available." : P.tmdb ? "Looking for subtitles…" : "")) + "</p>";
+    return h;
+  }
+  function subFile(file) {
+    if (!file) return; var k = subKey(), rd = new FileReader();
+    rd.onload = function () { var c = parseSubs(rd.result); if (!c.length) { SUB.src = "none"; dock(); return; }
+      SUB.cues = c; SUB.src = "own"; SUB.ownName = file.name.slice(0, 40);
+      try { sv("subown:" + k, { n: SUB.ownName, c: c }); var idx = ld("subownidx", []).filter(function (x) { return x !== k; }); idx.push(k); while (idx.length > 12) { try { LS.removeItem("vesper.fs.subown:" + idx.shift()); } catch (e) {} } sv("subownidx", idx); } catch (e) {}
+      subStart(); dock(); };
+    rd.readAsText(file);
+  }
+  document.addEventListener("keydown", function (e) {
+    if (!el || !el.classList.contains("on") || e.metaKey || e.ctrlKey || e.altKey || /input|select|textarea/i.test((e.target.tagName || ""))) return;
+    var k = e.key.toLowerCase(), hit = true;
+    if (k === "escape") { if (el.classList.contains("max")) maxi(false); else close(); }
+    else if (k === "f") maxi(!el.classList.contains("max"));
+    else if (k === "n" && P.t.type === "SHOW") step(1);
+    else if (k === "p" && P.t.type === "SHOW") step(-1);
+    else if (k === "s") { if (SUB.cues) { SUB.prev = SUB.lang; subUse("off"); } else subUse(SUB.prev && SUB.prev !== "off" ? SUB.prev : "english"); }
+    else if (k === "[" || k === "]") { if (!SUB.cues) return; SUB.off = Math.round((SUB.off + (k === "]" ? 0.5 : -0.5)) * 10) / 10; sv("suboff:" + (P.imdb || P.t.id), SUB.off); subTick(); dock(); }
+    else hit = false;
+    if (hit) e.preventDefault();
+  });
   function close(fromPop) {
     if (!el || !el.classList.contains("on")) return false;
-    el.classList.remove("on", "dock", "max", "rot"); pin(false); guard(false); clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
+    el.classList.remove("on", "dock", "max", "rot"); pin(false); guard(false); clearInterval(subT); subDraw(""); SUB.key = ""; clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
     if (!fromPop && history.state && history.state.fsp) history.back();
     return true;
   }
@@ -700,8 +817,20 @@
     return d;
   }
   // ---------- Continue watching: wide cards that resume with one tap ----------
+  function cwNext(x, t) {   // what comes after the episode you stopped at (and is it new?)
+    if (x.type !== "series" || (x.nxAt && Date.now() - x.nxAt < 864e5)) return;
+    meta(t).then(function (r) { var flat = []; (r.m.videos || []).forEach(function (v) { if (v.season > 0 && v.number) flat.push(v); });
+      flat.sort(function (a, b) { return a.season - b.season || a.number - b.number; });
+      var after = x.fin ? flat.filter(function (v) { return v.season > x.s || (v.season === x.s && v.number > x.e); })[0] : null;
+      var rel = after && Date.parse(after.released || after.firstAired || "");
+      x.nx = after && (!rel || rel <= Date.now()) ? [after.season, after.number] : null; x.nxNew = !!(x.nx && rel && Date.now() - rel < 7 * 864e5); x.nxAt = Date.now();
+      if (CW[x.imdb]) { CW[x.imdb].nx = x.nx; CW[x.imdb].nxNew = x.nxNew; CW[x.imdb].nxAt = x.nxAt; sv("cw", CW); }
+    }).catch(function () {});
+  }
   function cwCard(t) {
-    var x = t._cw || (t.imdb_id && CW[t.imdb_id]) || {}, pct = x.d ? Math.max(3, Math.min(100, x.c / x.d * 100)) : 0, left = x.d ? Math.max(1, Math.round((x.d - x.c) / 60)) : 0;
+    var x = t._cw || (t.imdb_id && CW[t.imdb_id]) || {}; cwNext(x, t);
+    if (x.fin && x.nx) { var nx = x.nx; return cwCardNext(t, x, nx); }
+    var pct = x.d ? Math.max(3, Math.min(100, x.c / x.d * 100)) : 0, left = x.d ? Math.max(1, Math.round((x.d - x.c) / 60)) : 0;
     var c = document.createElement("div"); c.className = "cwc"; c.dataset.free = t.id; c.dataset.id = t.id;
     c.innerHTML = '<div class="cwa"><img decoding="async" loading="lazy" src="' + esc(S.bd(t, "s1440") || S.po(t, "s592") || "") + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' +
       '<div class="cwg"></div><div class="cwp"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
@@ -709,6 +838,15 @@
       '<div class="cwb"><i style="width:' + pct.toFixed(0) + '%"></i></div></div>';
     return c;
   }
+  function cwCardNext(t, x, nx) {   // finished an episode: the card offers the next one
+    var c = document.createElement("div"); c.className = "cwc"; c.dataset.id = t.id; c.dataset.cwnext = nx[0] + ":" + nx[1];
+    c.innerHTML = '<div class="cwa"><img decoding="async" loading="lazy" src="' + esc(S.bd(t, "s1440") || S.po(t, "s592") || "") + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' +
+      '<div class="cwg"></div>' + (x.nxNew ? '<span class="cwnew">New episode</span>' : "") + '<div class="cwp"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
+      '<div class="cwt"><b>' + esc(t.title) + "</b><small>Up next · S" + nx[0] + " · E" + nx[1] + "</small></div></div>";
+    return c;
+  }
+  document.addEventListener("click", function (e) { var c = e.target.closest && e.target.closest("[data-cwnext]"); if (!c) return;
+    e.stopPropagation(); e.preventDefault(); var p = c.dataset.cwnext.split(":"); play(S.T[c.dataset.id], { s: +p[0], e: +p[1] }); }, true);
   // ---------- seasonal banner (the aggregator's holiday card, Vesper-style) ----------
   var FESTS = [
     { k: "xmas", from: [11, 15], to: [12, 31], day: [12, 25], title: "Cozy up for the holidays.", sub: "Warm family films, classics and new favourites to share.", until: "to Christmas", q: "christmas",
