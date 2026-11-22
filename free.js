@@ -777,6 +777,7 @@
 
   // title page of a free-only title: description, length, cast and genres from Cinemeta
   function prep(t, d) {
+    if (t && !t._fsw && ON && can(t)) { t._fsw = 1; meta(t).catch(function () {}); if (t.type === "SHOW" || asia(t)) kkFind(t, 1); }   // Watch free starts faster
     if (!t || !t.fs || (t.avail || []).length || t._fsp) return; t._fsp = 1;
     meta(t).then(function (r) { var m = r.m || {};
       if (!t.desc && m.description) t.desc = m.description;
@@ -883,6 +884,10 @@
     });
     return el;
   }
+  (function () { var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate(); if (md < 1201 && md > 1115 || md >= 1201 && md <= 1231) {
+    var hat = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 8" shape-rendering="crispEdges"><rect x="3" y="2" width="4" height="1" fill="#d42a35"/><rect x="2" y="3" width="6" height="1" fill="#d42a35"/><rect x="4" y="1" width="3" height="1" fill="#d42a35"/><rect x="6" y="0" width="2" height="1" fill="#d42a35"/><rect x="8" y="0" width="2" height="2" fill="#fff"/><rect x="1" y="4" width="8" height="2" fill="#fff"/></svg>');
+    var st = document.createElement("style"); st.textContent = ".hrow .logo.pix{overflow:visible}.hrow{position:relative}.hrow .logo.pix+h1{position:relative}.hrow::before{content:'';position:absolute;left:3px;top:-3px;width:20px;height:16px;background:url(\"" + hat + "\") no-repeat center/contain;image-rendering:pixelated;z-index:2;pointer-events:none;transform:rotate(-14deg)}";
+    document.head.appendChild(st); } })();
   window.VFS = { festEl: festEl, cwCard: cwCard, sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
     popped: function () { return close(true); }, open: function () { return !!(el && el.classList.contains("on")); } };
 })();
