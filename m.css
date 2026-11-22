@@ -879,3 +879,19 @@ html.desk .hero .inf,html.desk .hero .sh,html.desk .hero .svc{z-index:1;}
 .pc{box-shadow:0 6px 18px rgba(0,0,0,.28);}
 .sec-h{margin-top:6px;}
 html.desk .row{margin-bottom:40px;}
+
+/* v46 — tuned against SweetFox / 1shows: a little larger, tighter row titles, more air between rows,
+   softer card motion. Layout itself is unchanged. */
+.row-h{font-size:19px;letter-spacing:-.4px;padding-bottom:11px;}
+.row-h small{font-size:12.5px;}
+.row{margin-bottom:36px;contain-intrinsic-size:auto 250px;}
+.pc{transition:transform .35s var(--e),box-shadow .35s var(--e);}
+.pc:active{transform:scale(.96);transition:transform .12s;}
+.cwc,.wide{transition:transform .35s var(--e);}
+.cwc:active,.wide:active{transform:scale(.97);transition:transform .12s;}
+html.desk .row-h{font-size:22px;letter-spacing:-.33px;padding-bottom:14px;}
+html.desk .row{margin-bottom:46px;}
+html.desk .rail{gap:12px;}
+html.desk .pc{transition:transform .38s var(--e),box-shadow .38s var(--e);}
+html.desk .cwa{transition:transform .38s var(--e),box-shadow .38s var(--e);}
+html.desk .cwc:hover .cwa{transform:translateY(-4px);box-shadow:0 16px 34px rgba(0,0,0,.55),0 0 0 2px rgba(255,255,255,.8);}
