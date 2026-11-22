@@ -655,26 +655,108 @@
         SQ[qn] = withI.map(function (x) { return x.m; }); cb(SQ[qn]);
       });
   }
+  // ---------- the free pool: Cinemeta's lists carry country, genres, year, plot, rating, runtime — so the free row can
+  // answer "korean romance 2024", "new thrillers", "college", "cozy feel good" the same way your apps' results do ----------
+  var GN = { act: "Action", ani: "Animation", cmy: "Comedy", crm: "Crime", doc: "Documentary", drm: "Drama", fml: "Family", fnt: "Fantasy", hst: "History", hrr: "Horror", msc: "Music",
+    rma: "Romance", scf: "Sci-Fi", spt: "Sport", trl: "Thriller", war: "War", wsn: "Western", rly: "Reality-TV" };
+  var CCN = { KR: "South Korea", JP: "Japan", CN: "China", HK: "Hong Kong", TW: "Taiwan", TH: "Thailand", IN: "India", US: "United States", GB: "United Kingdom", ES: "Spain", FR: "France",
+    DE: "Germany", IT: "Italy", TR: "Turkey", MX: "Mexico", AU: "Australia", CA: "Canada", IE: "Ireland", DK: "Denmark", SE: "Sweden", NO: "Norway", FI: "Finland", IS: "Iceland", BE: "Belgium",
+    NL: "Netherlands", PL: "Poland", PK: "Pakistan", PH: "Philippines", BR: "Brazil" };
+  var POOL = {}, POOLC = ld("pool", {});
+  function poolPage(ty, cat, filt, skip) {   // one Cinemeta list page, slimmed and remembered for a day
+    var key = ty + "/" + cat + "/" + (filt || "") + "/" + (skip || 0);
+    var c = POOLC[key]; if (c && Date.now() - c.at < 864e5) return Promise.resolve(c.m);
+    if (POOL[key]) return POOL[key];
+    var u = CM + "/catalog/" + ty + "/" + cat + (filt || skip ? "/" + [filt, skip ? "skip=" + skip : ""].filter(Boolean).join("&") : "") + ".json";
+    return (POOL[key] = get(u, 15000).then(function (j) {
+      var m = (j.metas || []).map(function (x) { return { id: x.id, name: x.name, type: ty, releaseInfo: x.releaseInfo, year: +(String(x.year || x.releaseInfo || "").slice(0, 4)) || 0,
+        country: x.country || "", genres: x.genres || x.genre || [], description: (x.description || "").slice(0, 260), imdbRating: x.imdbRating, runtime: parseInt(x.runtime, 10) || 0 }; });
+      POOLC[key] = { at: Date.now(), m: m }; var ks = Object.keys(POOLC).sort(function (p, q2) { return POOLC[p].at - POOLC[q2].at; }); ks.slice(0, Math.max(0, ks.length - 40)).forEach(function (k) { delete POOLC[k]; });
+      sv("pool", POOLC); return m; }).catch(function () { delete POOL[key]; return []; }));
+  }
+  function fFit(m, moods) {   // the mood score for a Cinemeta item (same idea as the apps' moodFit)
+    var gs = m.genres || [], s = 0, h = (m.name || "") + " " + (m.description || "");
+    function has(code) { return gs.indexOf(GN[code]) >= 0; }
+    for (var i = 0; i < moods.length; i++) { var M = moods[i];
+      if (M.g) for (var g in M.g) if (has(g)) s += M.g[g];
+      if (M.x) for (var x in M.x) if (has(x)) { if (M.x[x] === 1) return -99; s -= 4; }
+      if (M.kw && M.kw.test(h)) s += 3; if (M.nkw && M.nkw.test(h)) s -= 7;
+      if (M.maxRun && m.type === "movie" && m.runtime && m.runtime > M.maxRun) s -= 5;
+      if (M.type && (M.type === "SHOW") !== (m.type === "series")) s -= 4;
+      if (M.rate) s += ((+m.imdbRating || 6) - 6.5); }
+    return s;
+  }
+  function freeFind(q, opt, cb) {
+    var P = opt.P || { genres: [], rest: [] }, moods = opt.moods || [], topics = (opt.topics || []).map(function (s) { try { return new RegExp(s, "i"); } catch (e) { return null; } }).filter(Boolean);
+    var Y = new Date().getFullYear(), types = P.type === "MOVIE" ? ["movie"] : P.type === "SHOW" ? ["series"] : ["movie", "series"];
+    var structured = !!(P.structured || moods.length), jobs = [];
+    // which lists to read
+    types.forEach(function (ty) {
+      var pages = ty === "movie" ? [0, 50] : [0];   // series pages are heavy (they carry every episode)
+      var gname = (P.genres || []).map(function (g) { return GN[g]; }).filter(Boolean)[0];
+      if (!gname && moods.length) { var best = null, bw = 0; moods.forEach(function (M) { for (var g in (M.g || {})) if (M.g[g] > bw && GN[g]) { bw = M.g[g]; best = GN[g]; } }); gname = best; }
+      if (P.year) jobs.push(poolPage(ty, "year", "genre=" + P.year)), ty === "movie" && jobs.push(poolPage(ty, "year", "genre=" + P.year, 50));
+      else if (P.newish) { jobs.push(poolPage(ty, "year", "genre=" + Y)); jobs.push(poolPage(ty, "year", "genre=" + (Y - 1))); }
+      else if (P.era) [P.era[0], P.era[0] + 4, P.era[1]].forEach(function (yy) { jobs.push(poolPage(ty, "year", "genre=" + yy)); });
+      if (gname) pages.forEach(function (sk) { jobs.push(poolPage(ty, "top", "genre=" + gname, sk)); });
+      if (!gname && !P.year && !P.newish && !P.era) pages.concat(topics.length && ty === "movie" ? [100] : []).forEach(function (sk) { jobs.push(poolPage(ty, "top", "", sk)); });
+    });
+    // plain words (titles) and the topic's look-alike words ("college" → university, campus…)
+    var words = (P.rest || []).join(" ");
+    if (!structured || words) jobs.push(new Promise(function (ok) { search(structured ? words : q, ok); }));
+    topics.slice(0, 1).forEach(function (re) { re.source.replace(/^\\b\(\?:/, "").replace(/\)$/, "").split("|").slice(0, 4).forEach(function (w) { w = w.replace(/\\/g, ""); if (w.length >= 4 && w !== words) jobs.push(new Promise(function (ok) { search(w, ok); })); }); });
+    var ccNames = (P.cc || []).map(function (c) { return CCN[c]; }).filter(Boolean);
+    var kkJob = (P.cc || []).some(function (c) { return ASIA[c]; }) ? kkIndex() : Promise.resolve([]);   // KissKH can't judge moods, but its newest fit "feel good korean drama" well enough after the scored ones
+    Promise.all([Promise.all(jobs), kkJob]).then(function (r) {
+      var seen = {}, all = [];
+      [].concat.apply([], r[0]).forEach(function (m) { if (m && m.id && !seen[m.id]) { seen[m.id] = 1; if (!m.type) m.type = "movie"; all.push(m); } });
+      var ok = all.filter(function (m) {
+        if (P.type && (P.type === "SHOW") !== (m.type === "series")) return false;
+        var yy = m.year || +(String(m.releaseInfo || "").slice(0, 4)) || 0;
+        if (P.year && yy && Math.abs(yy - P.year) > 0) return false;
+        if (P.era && yy && !(yy >= P.era[0] && yy <= P.era[1])) return false;
+        if (P.newish && yy && yy < Y - 1) return false;
+        if (ccNames.length && m.country !== undefined && !ccNames.some(function (n) { return String(m.country || "").indexOf(n) >= 0; })) return m.country === "" ? false : false;
+        if ((P.genres || []).length && m.genres && m.genres.length && !P.genres.every(function (g) { return m.genres.indexOf(GN[g]) >= 0; })) return false;
+        if ((P.notG || []).length && (m.genres || []).some(function (g) { return P.notG.some(function (c) { return GN[c] === g; }); })) return false;
+        if (topics.length && m.description !== undefined && !topics.every(function (re) { return re.test((m.name || "") + " " + (m.description || "")); })) return false;
+        return true; });
+      // search results (no plot/country attached) only count for plain title searches
+      if (structured) ok = ok.filter(function (m) { return m.description !== undefined || !ccNames.length; });
+      var scored = ok.map(function (m) { var f = moods.length ? fFit(m, moods) : 0;
+        return { m: m, f: f, s: f * 2 + (+m.imdbRating || 6) * 0.8 + (P.newish ? (m.year || 0) - Y : 0) * 2 }; })
+        .filter(function (x) { return !moods.length || x.f >= 3; });
+      if (structured || topics.length) scored.sort(function (a, b) { return b.s - a.s; });
+      var items = scored.map(function (x) { return T(x.m); }).filter(Boolean);
+      // KissKH for Korean / Japanese / Chinese / Thai searches: newest first, by type and year
+      var kk = (r[1] || []).filter(function (k) { return P.cc.indexOf(k.cc) >= 0 && (!P.type || (P.type === "SHOW") === (k.ty === "S" || k.ty === "A")) &&
+        (!P.year || k.y === P.year) && (!P.era || (k.y >= P.era[0] && k.y <= P.era[1])) && (!P.newish || !k.y || k.y >= Y - 1); }).slice(0, 24);
+      if (moods.length) kk = kk.slice(0, 14);
+      if (!kk.length) return cb(items);
+      Promise.race([Promise.all(kk.map(function (k) { return kkShard(k.id); })), new Promise(function (okk) { setTimeout(function () { okk([]); }, 3000); })]).then(function (ths) {
+        var kt = kk.map(function (k, i) { return kkT(k, ths[i] && ths[i].th); }), have = {}; items.forEach(function (t) { have[norm(t.title)] = 1; });
+        var kf = kt.filter(function (t) { return !have[norm(t.title)]; }); cb(moods.length || (P.genres || []).length ? items.concat(kf.slice(0, 10)) : kf.concat(items)); });   // KissKH has no genres: after the genre matches
+    });
+  }
   function searchInto(body, q, R, rowEl, opt) {
     if (!ON || !q || q.length < 2) return;
-    var my = ++tok, TY = (opt && opt.type) || null;
-    var box = document.createElement("div"); box.className = "sbres fsres"; box.innerHTML = '<div class="row-h">On free servers<small>looking…</small></div><div class="sbph"></div>';
+    opt = opt || {}; var my = ++tok, TY = opt.type || null, title = "On free servers" + (opt.label ? " · " + opt.label.charAt(0).toLowerCase() + opt.label.slice(1) : "");
+    var box = document.createElement("div"); box.className = "sbres fsres"; box.innerHTML = '<div class="row-h">' + esc(title) + '<small>looking…</small></div><div class="sbph"></div>';
     body.insertBefore(box, body.querySelector(".ownend") || body.firstChild);
     setTimeout(function () {
       if (my !== tok) return;
-      search(q, function (list) {
+      freeFind(q, opt, function (items) {
         if (my !== tok || !box.isConnected) return;
-        var items = list.map(T).filter(function (t) { return t && (!TY || t.type === TY); }).filter(function (t, i, a) { return a.indexOf(t) === i; }).slice(0, 30);
-        kkSearch(q, TY).then(function (kk) { if (my !== tok) return;
+        items = items.filter(function (t) { return t && (!TY || t.type === TY); }).filter(function (t, i, a) { return a.indexOf(t) === i; }).slice(0, 40);
+        // plain title searches also add KissKH-only titles
+        var plain = !(opt.P && opt.P.structured) && !(opt.moods || []).length;
+        (plain ? kkSearch(q, TY) : Promise.resolve([])).then(function (kk) {
+          if (my !== tok || !box.isConnected) return;
           var have = {}; items.forEach(function (t) { have[norm(t.title) + "|" + t.type] = 1; });
-          var more = kk.filter(function (t) { return items.indexOf(t) < 0 && !have[norm(t.title) + "|" + t.type]; });
-          if (!more.length) return;
-          var cur = body.querySelector(".fsres"); var all = items.concat(more).slice(0, 40);
-          var row2 = rowEl(S.R("On free servers", all, null, all.length + " · tap Watch free", 1, true)); row2.classList.add("sbres", "fsres");
-          if (cur) { cur.replaceWith(row2); if (row2._fill) row2._fill(); } });
-        if (!items.length) { box.querySelector("small").textContent = "nothing for “" + q + "”"; var ph = box.querySelector(".sbph"); if (ph) ph.remove(); return; }
-        var row = rowEl(S.R("On free servers", items, null, items.length + " · tap Watch free", 1, true)); row.classList.add("sbres", "fsres");
-        box.replaceWith(row); if (row._fill) row._fill();
+          items = items.concat(kk.filter(function (t) { return items.indexOf(t) < 0 && !have[norm(t.title) + "|" + t.type]; })).slice(0, 40);
+          if (!items.length) { box.querySelector("small").textContent = "nothing for “" + q + "”"; var ph = box.querySelector(".sbph"); if (ph) ph.remove(); return; }
+          var row = rowEl(S.R(title, items, null, items.length + " · tap Watch free", 1, true)); row.classList.add("sbres", "fsres");
+          box.replaceWith(row); if (row._fill) row._fill(); });
       });
     }, 280);
   }

@@ -801,14 +801,14 @@
       S.prefetchFull([R.top].concat(R.titles || []));
       var P = parseQuery(useQ); P.type = ty;
       if (window.VNW && (MODE === "all" || MODE === "title")) VNW.searchInto(body, useQ, R);
-      if (window.VFS && VFS.on()) VFS.searchInto(body, useQ, R, rowEl, { type: ty });
+      if (window.VFS && VFS.on()) { var MDq = moodsOf(useQ); VFS.searchInto(body, useQ, R, rowEl, { type: ty, P: MDq.moods.length ? Object.assign(parseQuery(MDq.rest), { type: ty || parseQuery(MDq.rest).type }) : P, moods: MDq.moods, topics: R.topics || [], label: R.moodLabel || (P.structured ? describe(P, true) : "") }); }
       if (window.VSB && VSB.on()) {
         VSB.searchInto(body, useQ, R, rowEl, { type: ty });
         if (P.structured && !P.who) { var anchorB = body.querySelector(".sbres"), lb = live(anchorB, describe(P, true) + " on ShowBox");
           if (!VSB.browse(P, function (items, done) { if (my === stok) lb.set(items, done); })) lb.el().remove(); }
       }
       // "Anything" mode: a name that's a person or a studio gets their filmography on top
-      if (MODE === "all" && !(R.top && S.norm(R.top.title) === S.norm(P0.rest.join(" "))) && P0.rest.length && !(P.structured && !P0.rest.length)) {
+      if (MODE === "all" && !R.mood && !(R.top && S.norm(R.top.title) === S.norm(P0.rest.join(" "))) && P0.rest.length && !(P.structured && !P0.rest.length)) {
         var nm = P0.rest.join(" ");
         if (nm.length >= 3) whoT = setTimeout(function () { resolve(nm, null, function (hit) { if (my !== stok || !hit) return;
           if (S.norm(hit.name) !== S.norm(nm) && !(PICK && PICK.id === hit.id)) { var cp2 = findPerson(nm); if (!cp2 || S.norm(cp2.n) !== S.norm(hit.name)) return; }
@@ -834,11 +834,12 @@
           (ta ? '<button class="btn play" data-play="' + R.top.id + '">' + G.play + "Play</button>" : "");
         body.appendChild(tp);
       }
+      if (R.topicFirst && R.vibe.length) { body.appendChild(h("div", "sec-h", esc((R.label || "").charAt(0).toUpperCase() + (R.label || "").slice(1)) + " stories <small class=\"secsub\">films &amp; series about it</small>")); body.appendChild(gridOf(R.vibe)); }
       if (R.titles.length) { body.appendChild(h("div", "sec-h", R.top ? "Also matching" : "Titles")); body.appendChild(gridOf(R.titles)); }
       // your apps first: ShowBox and free-server rows sit right after your apps' matches
       if (R.top || R.titles.length) { var oe = h("div", "ownend"); body.appendChild(oe); [].slice.call(body.querySelectorAll(".sbres")).forEach(function (x) { body.insertBefore(x, oe); }); }
       if (R.similar.length) { var row = rowEl(S.R("More like " + R.top.title, R.similar)); body.appendChild(row); row._fill(); }
-      if (R.vibe.length) { body.appendChild(h("div", "sec-h", "The “" + esc(R.label) + "” vibe")); body.appendChild(gridOf(R.vibe)); }
+      if (R.vibe.length && !R.topicFirst) { body.appendChild(h("div", "sec-h", "The “" + esc(R.label) + "” vibe")); body.appendChild(gridOf(R.vibe)); }
     }
 
     // ---------- autocomplete ----------
@@ -965,6 +966,76 @@
     "new york": "new york|manhattan|brooklyn|nyc|queens", london: "london|british|england", paris: "paris|france|french", road: "road trip|road|journey|drive", sad: "grief|loss|tragic|heartbreak",
     funny: "comedy|funny|hilarious", scary: "horror|terrif|haunt|scary", ghost: "ghost|haunt|spirit|paranormal", cop: "cop|police|detective|officer", lawyer: "lawyer|attorney|court|trial",
     doctor: "doctor|hospital|surgeon|medical", sport: "sport|team|coach|football|basketball|baseball|boxing", music: "music|band|singer|musician|concert", dance: "dance|dancer|ballet" };
+  var NEWW = { "new": 1, newest: 1, latest: 1, recent: 1, fresh: 1, upcoming: 0 };
+  // ---------- moods: what people mean by "cozy", "something to cry to", "mind-bending"… ----------
+  // g: genres that fit (weight), x: genres that don't (1 = never), kw/nkw: story words for / against, type/maxRun: limits
+  var MOODS = [
+    { k: "cozy", n: "Feel-good", re: /\b(cozy|cosy|comfort(ing)?|wholesome|heart ?warming|feel ?good|feelgood|uplifting|happy|cheerful|light ?hearted|chill|relaxing|easy (watch|going)|cute|healing|warm)\b/, g: { cmy: 3, fml: 3, rma: 2, ani: 1 }, x: { hrr: 1, war: 1, crm: 2, trl: 2 }, kw: /heartwarming|charming|friendship|feel-good|uplifting|warm|kind|family|small town|community|sweet|unlikely|bond|dream/i, nkw: /murder|serial killer|torture|kidnap|massacre|haunt|brutal/i },
+    { k: "sad", n: "Tearjerker", re: /\b(sad|cry|crying|tear ?jerker|emotional|heart ?breaking|tragic|tears|grief|melancholy|bittersweet|depressing|weep)\b/, g: { drm: 2, rma: 2 }, x: { cmy: 2, hrr: 1, crm: 2, trl: 2, act: 2, scf: 2 }, kw: /grief|loss|dying|terminal|cancer|tragic|heartbreak|farewell|memories|illness|mourning|bittersweet|first love|last days|sacrifice/i },
+    { k: "mind", n: "Mind-bending", re: /\b(mind ?(bending|blowing|boggling|twisting)|mindbending|trippy|twisty|plot twists?|twists|confusing|cerebral|psychological|thought ?provoking|head ?scratcher)\b/, g: { scf: 3, trl: 3, drm: 1 }, x: { fml: 1, cmy: 2 }, kw: /time loop|reality|memor(y|ies)|dream|twist|mind|parallel|simulation|identity|psycholog|alternate|consciousness|time travel|puzzle|illusion|clone/i },
+    { k: "dark", n: "Dark", re: /\b(dark|gritty|disturbing|bleak|grim|brutal|twisted|noir|sinister)\b/, g: { crm: 3, trl: 2, hrr: 1, drm: 1 }, x: { fml: 1, cmy: 2 }, kw: /dark|brutal|killer|revenge|twisted|obsession|corrupt|violent|sinister|underworld|cartel|psychopath/i },
+    { k: "slow", n: "Slow-burn", re: /\bslow ?burn(ing)?\b|\b(atmospheric|brooding|moody)\b/, g: { drm: 2, crm: 2, trl: 2 }, x: { cmy: 2, fml: 1 }, kw: /investigat|detective|mystery|secrets|quiet|small town|atmosph|remote/i, rate: 1 },
+    { k: "edge", n: "Edge-of-your-seat", re: /\b(edge of (my |your |the )?seat|suspense(ful)?|gripping|tense|nail ?biting|adrenaline|non ?stop|thrilling|intense|heart ?pounding)\b/, g: { trl: 3, act: 2, crm: 1 }, x: { fml: 1, rma: 2 }, kw: /race against|hostage|chase|escape|survive|countdown|heist|deadly|hunt|trapped|bomb/i },
+    { k: "scary", n: "Scary", re: /\b(scary|creepy|spooky|terrifying|haunting|chilling|frightening|horrifying)\b/, g: { hrr: 4, trl: 1 }, x: { fml: 1, cmy: 2 }, kw: /haunt|ghost|demon|possess|curse|creature|terror|supernatural|evil|exorcis/i },
+    { k: "date", n: "Date-night", re: /\bdate ?night\b|\b(romantic evening|for (a )?couples?|with (my )?(girlfriend|boyfriend|partner|wife|husband|gf|bf))\b/, g: { rma: 4, cmy: 2 }, x: { hrr: 1, war: 1, doc: 1 }, type: "MOVIE", maxRun: 135 },
+    { k: "funny", n: "Funny", re: /\b(funny|hilarious|laugh(s|ing)?|comedic|silly|goofy|witty|lol)\b/, g: { cmy: 4 }, x: { hrr: 2, war: 1 }, kw: /comed|hilarious|misadventure|quirky|wacky|prank|mishap|chaos/i },
+    { k: "epic", n: "Epic", re: /\b(epic|grand|blockbuster|spectacle|big budget)\b/, g: { fnt: 2, act: 2, hst: 2, war: 2, scf: 1 }, x: { doc: 1, rly: 1 }, big: 1 },
+    { k: "true", n: "True-story", re: /\b(true stor(y|ies)|based on (a )?true|real (life|events|story)|inspiring|inspirational|motivational|biopic|biography)\b/, g: { hst: 2, spt: 2, drm: 1, doc: 1 }, kw: /true story|based on|real-life|inspired by|biopic|real events|incredible story|life of/i },
+    { k: "short", n: "Short", re: /\b(short|quick|under (an|1|one) hour|before bed|lunch break)\b/, maxRun: 100 },
+    { k: "family", n: "Family", re: /\b(family (night|movie|friendly|fun)|for kids|kid ?friendly|with (my )?(kids|family|parents|little ones))\b/, g: { fml: 4, ani: 2, cmy: 1 }, x: { hrr: 1, crm: 1, war: 1 } },
+    { k: "binge", n: "Bingeable", re: /\b(binge ?(able|worthy|watch)?|addictive|can.?t stop)\b/, type: "SHOW", g: { trl: 2, crm: 2, drm: 1, scf: 1 }, big: 1 },
+    { k: "romance", n: "Romantic", re: /\b(love stor(y|ies)|swoon(y|worthy)?|chemistry|lovey|butterflies)\b/, g: { rma: 4 }, x: { hrr: 1 } },
+    { k: "action", n: "Action-packed", re: /\b(action ?packed|explosive|fight scenes?|martial arts|shoot ?out)\b/, g: { act: 4 }, x: { doc: 1 } }
+  ];
+  function moodsOf(q) {
+    var s = " " + S.norm(q) + " ", found = [];
+    MOODS.forEach(function (M) { var m = s.match(M.re); if (m) { found.push(M); s = s.replace(m[0], " "); } });
+    s = s.replace(/\b(something|anything|stuff|to watch|watch|for tonight|tonight|me|make|makes|that|will|i|want|feel|feeling|mood|kind of|kinda|type|good|great|best|really|very|but|a bit)\b/g, " ");
+    return { moods: found, rest: s.replace(/\s+/g, " ").trim() };
+  }
+  function hayOf(t) { return t._hay || (t._hay = [t.title, t.desc || "", (t.genres || []).map(function (g) { return S.GENRES[g] || ""; }).join(" "), S.vibes(t).join(" ")].join(" ")); }
+  function moodFit(t, moods, P) {
+    var gs = t.genres || [], s = 0, h = null;
+    for (var i = 0; i < moods.length; i++) { var M = moods[i];
+      if (M.g) for (var g in M.g) if (gs.indexOf(g) >= 0) s += M.g[g];
+      if (M.x) for (var x in M.x) if (gs.indexOf(x) >= 0) { if (M.x[x] === 1) return -99; s -= 4; }
+      if (M.kw || M.nkw) { h = h || hayOf(t); if (M.kw && M.kw.test(h)) s += 3; if (M.nkw && M.nkw.test(h)) s -= 7; }
+      if (M.maxRun && t.type === "MOVIE" && t.runtime && t.runtime > M.maxRun) s -= 5;
+      if (M.type && t.type !== M.type) s -= 4;
+      if (M.big) s += Math.min(3, Math.log(1 + (t.votes || 0)) / 4);
+      if (M.rate) s += ((t.imdb || 6) - 6.5); }
+    if (P && P.notGore) { h = h || hayOf(t); if (/\bgor[ey]|bloody|slasher|torture|gruesome|brutal/i.test(h)) return -99; }
+    return s;
+  }
+  function moodSearch(q, MD) {
+    var P = parseQuery(MD.rest), hid = S.hiddenSet(), Y = new Date().getFullYear(), T = S.taste();
+    var base = S.ALL.filter(function (t) {
+      if (!(t.avail || []).length || hid[t.id]) return false;
+      if (P.cc && countryScore(t, P.cc) < 1) return false;
+      if (P.type && t.type !== P.type) return false;
+      if (P.genres.length && !P.genres.every(function (g) { return (t.genres || []).indexOf(g) >= 0; })) return false;
+      if (P.notG.length && (t.genres || []).some(function (g) { return P.notG.indexOf(g) >= 0; })) return false;
+      if (P.year && t.year !== P.year) return false;
+      if (P.era && !(t.year >= P.era[0] && t.year <= P.era[1])) return false;
+      if (P.newish && !(t.year >= Y - 1)) return false;
+      return true; });
+    var scored = base.map(function (t) { var f = moodFit(t, MD.moods, P); return { t: t, f: f, s: f * 2 + qual(t) * 0.45 + (T.n >= 5 ? S.tasteScore(t, T) * 0.6 : 0) }; })
+      .filter(function (x) { return x.f >= 3; }).sort(function (a, b) { return b.s - a.s; });
+    var names = MD.moods.map(function (M) { return M.n; }).join(", "), what = describe(P, true);
+    var label = (names + " " + (what === "Titles" ? (P.type === "SHOW" ? "series" : P.type === "MOVIE" ? "movies" : "picks") : what.charAt(0).toLowerCase() + what.slice(1))).trim();
+    var sections = [];
+    var top = scored.slice(0, 48).map(function (x) { return x.t; });
+    if (!P.type && top.length) {
+      var mv = scored.filter(function (x) { return x.t.type === "MOVIE"; }).slice(0, 30).map(function (x) { return x.t; }), sh = scored.filter(function (x) { return x.t.type === "SHOW"; }).slice(0, 30).map(function (x) { return x.t; });
+      if (mv.length) sections.push({ title: label.replace(/ picks$/, "") + (/picks$/.test(label) ? " films" : " · films"), items: mv });
+      if (sh.length) sections.push({ title: label.replace(/ picks$/, "") + (/picks$/.test(label) ? " series" : " · series"), items: sh });
+    } else if (top.length) sections.push({ title: label, items: top });
+    var newer = scored.filter(function (x) { return x.t.year >= Y - 1; }).slice(0, 20).map(function (x) { return x.t; });
+    if (newer.length >= 4 && !P.newish && !P.year) sections.splice(1, 0, { title: "New · " + label.charAt(0).toLowerCase() + label.slice(1), items: newer });
+    if (!sections.length) return null;
+    var others = MOODS.filter(function (M) { return MD.moods.indexOf(M) < 0; }).slice(0, 4).map(function (M) { return M.n.toLowerCase() + (P.cc ? " " + CNAME[P.cc[0]].toLowerCase() : "") + (P.type === "SHOW" ? " series" : P.type === "MOVIE" ? " movies" : ""); });
+    return { sections: sections, chips: others, mood: MD.moods.map(function (M) { return M.k; }), moodLabel: label };
+  }
   var STOP = { the: 1, a: 1, an: 1, and: 1, of: 1, with: 1, movie: 1, movies: 1, film: 1, films: 1, show: 1, shows: 1, series: 1, like: 1, about: 1, set: 1, in: 1, for: 1, vibe: 1, vibes: 1 };
   var COUNTRY = { korean: ["KR"], korea: ["KR"], kdrama: ["KR"], kdramas: ["KR"], japanese: ["JP"], japan: ["JP"], jdrama: ["JP"], indian: ["IN"], india: ["IN"], bollywood: ["IN"],
     hindi: ["IN"], tamil: ["IN"], telugu: ["IN"], malayalam: ["IN"], kannada: ["IN"], american: ["US"], usa: ["US"], hollywood: ["US"], british: ["GB"], uk: ["GB"], england: ["GB"],
@@ -982,8 +1053,11 @@
     hst: "historical", fml: "family", spt: "sports", msc: "musicals", rly: "reality", wsn: "westerns", drm: "dramas" };
   function parseQuery(q) {
     var w = S.norm(q).replace(/\bk drama/g, "kdrama").replace(/\bj drama/g, "jdrama").replace(/\bc drama/g, "cdrama").replace(/\bsci fi\b/g, "scifi").replace(/\bscience fiction\b/g, "scifi").replace(/\brom com\b/g, "romcom").split(" ").filter(Boolean);
-    var P = { cc: null, type: null, genres: [], year: null, era: null, rest: [] }, dramaWord = false;
+    var P = { cc: null, type: null, genres: [], year: null, era: null, rest: [], newish: false, notG: [] }, dramaWord = false, neg = false;
     w.forEach(function (x) {
+      if (NEWW[x]) { P.newish = true; return; }
+      if (x === "not" || x === "no" || x === "without" || x === "non") { neg = true; return; }
+      if (neg) { neg = false; if (GENREW[x]) { P.notG.push(GENREW[x]); return; } if (/^(gor[ey]|gory|blood|bloody|violent|violence)$/.test(x)) { P.notGore = true; return; } }
       var m = x.match(/^(\d{2}|\d{4})s$/), y = x.match(/^(19|20)\d{2}$/);
       if (m) { var d = +m[1]; d = d < 100 ? (d >= 30 ? 1900 + d : 2000 + d) : d; P.era = [d, d + 9]; return; }
       if (y) { P.year = +x; return; }
@@ -994,7 +1068,7 @@
     });
     // "korean drama" = K-dramas (series); "drama" on its own = the drama genre
     if (dramaWord) { if (P.cc && !P.type) P.type = "SHOW"; else if (!P.cc) P.genres.push("drm"); }
-    P.structured = !!(P.cc || P.type || P.genres.length || P.year || P.era);
+    P.structured = !!(P.cc || P.type || P.genres.length || P.year || P.era || P.newish);
     return P;
   }
   // how surely a title comes from a country: its original-language title is the strongest clue,
@@ -1043,6 +1117,15 @@
       return true;
     });
     if (P.cc && !P.ccLoose && base.length < 10) { P.ccLoose = true; return structuredSearch(q, P); }
+    if (P.notG && P.notG.length) base = base.filter(function (t) { return !(t.genres || []).some(function (g) { return P.notG.indexOf(g) >= 0; }); });
+    if (P.newish && !P.year && !P.era) {   // "new korean dramas": newest first
+      var Yn = new Date().getFullYear(), fresh = base.filter(function (t) { return t.year >= Yn - 1; });
+      if (fresh.length < 12) fresh = base.filter(function (t) { return t.year >= Yn - 3; });
+      fresh.sort(function (a, b) { return (qual(b) + ((b.year || 0) >= Yn ? 3 : 0)) - (qual(a) + ((a.year || 0) >= Yn ? 3 : 0)); });   // popular among the recent, this year's a little ahead
+      var Pd = Object.assign({}, P, { newish: false }), lab = describe(Pd);
+      return { sections: [{ title: "New " + (lab === "Titles" ? "on your apps" : lab.charAt(0).toLowerCase() + lab.slice(1)), items: fresh.slice(0, 60), years: true }],
+        chips: [lab.toLowerCase() + " 2025", lab.toLowerCase() + " 2024", "new " + lab.toLowerCase() + " movies", "new " + lab.toLowerCase() + " series"].map(function (c) { return c.replace(/^titles /, ""); }) };
+    }
     // a person's name ("leonardo dicaprio movies", "nolan films 2010s")? then it's their work
     var rest = P.rest.join(" "), who = rest ? findPerson(rest) : null;
     if (who) { base = base.filter(function (t) { return (t.cast || []).concat(t.dirs || []).some(function (n) { return S.norm(n) === who.k; }); }); P.who = who.n; rest = "";
@@ -1101,6 +1184,11 @@
       S.norm(t.title).split(" ").forEach(function (w) { add(w, wt * 3); });
       (t.cast || []).slice(0, 4).concat(t.dirs || []).forEach(function (n) { S.norm(n).split(" ").forEach(function (w) { add(w, wt); }); }); });
     [COUNTRY, TYPEW, GENREW, SYN].forEach(function (m) { Object.keys(m).forEach(function (k) { k.split(" ").forEach(function (w) { add(w, 400); }); }); });
+    ("cozy cosy wholesome heartwarming warming feel good feelgood uplifting cheerful lighthearted hearted chill relaxing cute healing tearjerker jerker emotional heartbreaking breaking tragic tears grief melancholy bittersweet depressing weep cry crying " +
+     "mind bending mindbending blowing boggling twisting trippy twisty twists cerebral psychological thought provoking scratcher gritty disturbing bleak grim brutal twisted noir sinister slow burn burning atmospheric brooding moody " +
+     "edge seat suspense suspenseful gripping tense nail biting adrenaline thrilling intense pounding scary creepy spooky terrifying haunting chilling frightening horrifying date night couple couples girlfriend boyfriend partner " +
+     "hilarious laugh laughs laughing comedic silly goofy witty epic grand blockbuster spectacle true story stories inspiring inspirational motivational biopic biography short quick bingeable binge bingeworthy addictive " +
+     "swoon swoony chemistry butterflies explosive martial gory gore bloody violent violence without newest latest recent fresh something tonight").split(" ").forEach(function (w) { add(w, 500); });
     ["new", "york", "rain", "rainy", "college", "heist", "vibe", "school", "detective", "road", "trip", "small", "town", "time", "travel", "wedding", "zombie", "revenge", "prison", "island", "summer"].forEach(function (w) { add(w, 300); });
     VOCAB = { f: f, words: Object.keys(f) }; return VOCAB;
   }
@@ -1160,6 +1248,8 @@
           chips: [src.title, "movies like " + src.title, "shows like " + src.title].filter(function (c) { return S.norm(c) !== S.norm(q); }), like: src };
       }
     }
+    var MD = moodsOf(q);
+    if (MD.moods.length) { var MR = moodSearch(q, MD); if (MR) return MR; }
     var PQ = parseQuery(q);
     // pure "kind of thing" searches (korean movies 2016, thriller 2010s…) — unless it's clearly a real title
     if (PQ.structured) {
@@ -1207,9 +1297,12 @@
     // 3) more like the top result
     var similar = top ? S.similar(top, 20).filter(function (t) { return avail(t) && !shown[t.id]; }) : [];
     if (top && S.norm(top.title) === nr) vibe = [];   // you searched a real title: show what's like it, not word matches
+    var topicWord = toks.filter(function (w) { return SYN[w]; })[0];
+    var topicFirst = !!(topicWord && vibe.length >= 4 && !(top && S.norm(top.title) === nr && (top.votes || 0) > 20000));
     var chips = byName.people.slice(0, 3).concat(byName.genres.slice(0, 2));
     if (!era && rest) chips = chips.concat([rest + " 2000s", rest + " 2010s"]).slice(0, 6);
-    return { top: top, titles: titles, similar: similar, vibe: vibe, chips: chips, label: [rest, era ? (era[0] === era[1] ? era[0] : era[0] + "s") : ""].filter(Boolean).join(" · ") };
+    return { top: top, titles: titles, similar: similar, vibe: vibe, chips: chips, label: [rest, era ? (era[0] === era[1] ? era[0] : era[0] + "s") : ""].filter(Boolean).join(" · "),
+      topicFirst: topicFirst, topics: pats.map(function (p) { return p.source; }) };
   }
 
   // ---------- My Vesper ----------

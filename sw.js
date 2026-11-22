@@ -1,5 +1,5 @@
 /* Vesper for iPhone — keeps the app working offline and opening instantly. The show list refreshes whenever you're online. */
-var V = "vesper-v49";
+var V = "vesper-v50";
 var SHELL = ["./", "index.html", "m.css", "m.js", "sitereader.js", "seek.js", "sites.js", "nfworld.js", "free.js", "desk.js", "deskfx.js", "explore.js", "vexp.js", "sync.js", "shim.js", "shape.js", "taste.js", "config.js", "manifest.webmanifest",
   "fonts/inter-latin.woff2", "icons/vp-icon-180.png", "icons/vesper-mark.svg", "logos/netflix.png", "logos/amazon.png", "logos/hotstar.png", "logos/apple.png", "logos/crunchyroll.png"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
