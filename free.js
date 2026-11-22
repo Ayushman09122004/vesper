@@ -44,8 +44,17 @@
   ];
   var NOADS = ld("noads", true);   // keep servers with ads out of the way (default)
   function adsOk() { return !NOADS || (P && P.allowAds); }
+  // ---------- smart pick: what each server did on THIS device (start time, freezes, misses) decides the order ----------
+  var HEALTH = ld("health", {});
+  function hOf(k) { return HEALTH[k] || (HEALTH[k] = { ok: 0, miss: 0, start: 0, watch: 0, stall: 0, at: 0 }); }
+  function hSave() { sv("health", HEALTH); }
+  function hScore(k) { var h = HEALTH[k]; if (!h || h.ok + h.miss < 1) return null;
+    var rel = (h.ok + 1) / (h.ok + h.miss + 2), smooth = h.watch > 60 ? 1 - Math.min(1, h.stall / h.watch * 4) : 0.85, fast = h.start ? Math.max(0, 1 - h.start / 25000) : 0.6;
+    return rel * 55 + smooth * 30 + fast * 15 + (Date.now() - h.at < 3 * 864e5 && h.ok ? 3 : 0); }
   function order(all) { var fav = ld("srv", ""), rank = function (x) { return x.kk ? (P && P.asia ? -1 : 1) : x.ad === 0 ? 0 : x.ad === "lock" ? 1 : x.quiet ? 3 : 2; };
-    var l = SERVERS.filter(function (x) { return x.kk ? !!(P && P.kk) : all || x.ad !== 1 || adsOk(); }).sort(function (a, b) { return rank(a) - rank(b) || SERVERS.indexOf(a) - SERVERS.indexOf(b); }); var i = l.findIndex(function (x) { return x.k === fav; }); if (i > 0 && !(P && P.asia && P.kk && l[0].kk)) l.unshift(l.splice(i, 1)[0]); return l; }
+    var l = SERVERS.filter(function (x) { return x.kk ? !!(P && P.kk) : all || x.ad !== 1 || adsOk(); }).sort(function (a, b) {
+      var sa = hScore(a.k), sb = hScore(b.k);
+      return rank(a) - rank(b) || (sa != null && sb != null ? sb - sa : sa != null && sa >= 50 ? -1 : sb != null && sb >= 50 ? 1 : 0) || SERVERS.indexOf(a) - SERVERS.indexOf(b); }); var i = l.findIndex(function (x) { return x.k === fav; }); if (i > 0 && !(P && P.asia && P.kk && l[0].kk)) l.unshift(l.splice(i, 1)[0]); return l; }
 
   // ---------- titles ----------
   var BYIMDB = null;
@@ -128,6 +137,8 @@
     ".fsauto{position:absolute;left:10px;right:10px;bottom:10px;z-index:2;display:flex;align-items:center;gap:10px;background:rgba(10,10,14,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:12px;padding:9px 10px 9px 14px;color:#fff;font:500 13.5px -apple-system,system-ui,sans-serif}" +
     ".fsauto span{flex:1}.fsauto button{border:0;border-radius:99px;background:#fff;color:#000;font:600 13px -apple-system,system-ui,sans-serif;padding:7px 13px;cursor:pointer}.fsauto button.g{background:rgba(255,255,255,.16);color:#fff}" +
     ".fsrv button.bad{opacity:.45}.fsrv button.ok small{color:#7be0a8}" +
+    ".fsbest{display:inline-block;font:800 9.5px -apple-system,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#04140b;background:#3fcf8e;border-radius:5px;padding:2px 6px;margin-bottom:5px}" +
+    ".fsst{display:block;font-style:normal;font-size:11px;color:#7be0a8;margin-top:3px}" +
     ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
     ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
     ".fsbar .fsmx{font-size:17px;padding:0;width:36px}" +
@@ -238,8 +249,8 @@
       if (b.hasAttribute("data-fsmax")) return maxi(!el.classList.contains("max"));
       if (b.dataset.srv) { P.srv = b.dataset.srv; P.auto = 0; return load(); }
       if (b.hasAttribute("data-fsnexts")) { if (W && W.k === P.srv) { W.done = 0; return fail("user"); } var l = order(), j = l.findIndex(function (x) { return x.k === P.srv; }); P.srv = l[(j + 1) % l.length].k; return load(); }
-      if (b.hasAttribute("data-fsstay")) return settle(false);
-      if (b.hasAttribute("data-fsgo")) return fail("user");
+      if (b.hasAttribute("data-fsstay")) { if (FL && FL.offered) { FL.at = Date.now(); FL.offered = 0; banner(null); return; } return settle(false); }
+      if (b.hasAttribute("data-fsgo")) { if (W && W.done && FL && FL.offered) { W.done = 0; P.resume = FL.t; } return fail(FL && FL.offered ? "stuck" : "user"); }
       if (b.hasAttribute("data-fsads")) { P.allowAds = 1; var na = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (na) { P.srv = na.k; P.auto = 1; load(); } return; }
       if (b.hasAttribute("data-fsadsw")) { NOADS = !NOADS; sv("noads", NOADS); return dock(); }
       if (b.hasAttribute("data-fsretry")) { P.bad = {}; P.auto = 1; P.srv = order()[0].k; return load(); }
@@ -283,7 +294,10 @@
         '<select data-fse>' + cur.eps.map(function (x) { return '<option value="' + x.e + '"' + (x.e === P.e ? " selected" : "") + ">" + x.e + ". " + esc(x.title) + "</option>"; }).join("") + "</select>" +
         '<button data-fsprev>‹ Prev</button><button data-fsnext>Next ›</button></div>';
     }
-    function cell(x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + "><b>" + x.n + (x.ad === 0 ? ' <span class="fsok">✓</span>' : x.ad === "lock" ? ' <span class="fslk">🔒</span>' : "") + "</b><small>" + x.d + "</small></button>"; }
+    var best = order().filter(function (x) { return hScore(x.k) != null; }).sort(function (a, b) { return hScore(b.k) - hScore(a.k); })[0];
+    function stat(k) { var h = HEALTH[k]; if (!h || h.ok < 1) return ""; var s = Math.round((h.start || 0) / 1000), sm = h.watch > 60 ? (h.stall / h.watch < 0.02 ? "smooth" : h.stall / h.watch < 0.08 ? "a few pauses" : "often freezes") : "";
+      return '<em class="fsst">' + (s ? "starts ~" + s + "s" : "") + (s && sm ? " · " : "") + sm + "</em>"; }
+    function cell(x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + ">" + (best && best.k === x.k ? '<span class="fsbest">Best for you</span>' : "") + "<b>" + x.n + (x.ad === 0 ? ' <span class="fsok">✓</span>' : x.ad === "lock" ? ' <span class="fslk">🔒</span>' : "") + "</b><small>" + x.d + "</small>" + stat(x.k) + "</button>"; }
     var all = order(true), clean = all.filter(function (x) { return x.ad !== 1; }), ads = all.filter(function (x) { return x.ad === 1; });
     html += '<div class="fsh">Ad-free servers</div><div class="fsrv">' + clean.map(cell).join("") + "</div>" +
       '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
@@ -356,12 +370,13 @@
     if (!b) { b = document.createElement("div"); b.className = "fsauto"; box.appendChild(b); } b.innerHTML = html; }
   function settle(ok) {   // this server works (ok) — stop the autopilot
     clearTimeout(autoT); clearInterval(tickT); banner(null); if (!W) return; W.done = 1;
+    if (ok && P && !W.learned) { W.learned = 1; var hh = hOf(W.k), ms = Date.now() - W.t0; hh.ok++; hh.at = Date.now(); hh.start = hh.start ? hh.start * 0.7 + ms * 0.3 : ms; hSave(); setTimeout(function () { if (P && el) dock(); }, 0); }
     if (ok && P) { P.okk = W.k; sv("srv", W.k); var sub = el.querySelector(".fst small"); if (sub && !/found/.test(sub.textContent)) sub.textContent += " · found"; mark(); }
   }
   function mark() { [].forEach.call(el.querySelectorAll(".fsrv [data-srv]"), function (b) { b.classList.toggle("bad", !!(P.bad && P.bad[b.dataset.srv])); b.classList.toggle("ok", P.okk === b.dataset.srv); }); }
   function fail(why) {
     if (!W || W.done || !P) return; W.done = 1; clearTimeout(autoT); clearInterval(tickT);
-    P.bad = P.bad || {}; P.bad[W.k] = 1;
+    P.bad = P.bad || {}; P.bad[W.k] = 1; if (why !== "user") { hOf(W.k).miss++; hSave(); }
     var l = order(), nx = l.filter(function (x) { return !P.bad[x.k]; })[0];
     if (!nx && !adsOk()) { banner('<span>The ad-free servers don’t have this one.</span><button data-fsads>Try ones with ads</button>'); return; }
     if (!nx) { banner('<span>None of the servers had this one. Try them again in a bit.</span><button class="g" data-fsretry>Retry</button>'); return; }
@@ -399,12 +414,31 @@
       if (ev.event === "fullscreen-enter" || ev.event === "fullscreen-exit") { pin(ev.event === "fullscreen-enter"); return; }
       if (ev.event === "play" || ev.event === "playing" || +ev.duration > 0 || +ev.currentTime > 0.3) { if (!W.done) settle(true); }
       if (+ev.currentTime > 0 && +ev.duration > 0) prog(+ev.currentTime, +ev.duration);
+      flow(ev);
       if (ev.event === "ended" && P.t.type === "SHOW" && W.done) { step(1); }
       return;
     }
     if (d.event === "status" && +d.data >= 400) return fail("status");
     if (/^vidrift:(unpaused|playing|time)/.test(d.type || "")) return settle(true);
   });
+  // Smoothness: while the player says it's playing, its time should move ~1s per second. If it stops moving (no
+  // pause, no end) the stream is frozen: that's counted against the server, and after 15s Vesper offers to switch.
+  var FL = null, flT = null;
+  function flow(ev) {
+    if (!W || !P) return; var now = Date.now(), e = ev.event;
+    if (!FL || FL.k !== W.k || FL.f !== W.f) FL = { k: W.k, f: W.f, t: +ev.currentTime || 0, at: now, play: false, offered: 0 };
+    if (e === "pause" || e === "ended" || e === "seeking" || e === "waiting-seek") { FL.play = false; FL.at = now; return; }
+    if (e === "play" || e === "playing") { FL.play = true; FL.at = now; return; }
+    if (e === "timeupdate") { var t = +ev.currentTime || 0;
+      if (t > FL.t + 0.05 && t - FL.t < 20) { var h = hOf(W.k); h.watch += Math.min(t - FL.t, (now - FL.at) / 1000 + 1); if (now - FL.at > 4000) h.stall += (now - FL.at) / 1000 - (t - FL.t); hSave(); FL.play = true; }
+      FL.t = t; FL.at = now; if (FL.offered) { FL.offered = 0; banner(null); } }
+  }
+  setInterval(function () {   // frozen stream check
+    if (!FL || !W || !P || !FL.play || W.f !== FL.f) return;
+    var gap = Date.now() - FL.at;
+    if (gap > 15000 && !FL.offered) { FL.offered = 1; var h = hOf(W.k); h.stall += 15; hSave();
+      banner('<span>The stream seems stuck' + (FL.t > 30 ? " at <b>" + clock(FL.t) + "</b>" : "") + '. Another server?</span><button data-fsgo>Switch</button><button class="g" data-fsstay>Keep waiting</button>'); }
+  }, 3000);
   // a tap inside the player (the page loses focus to the frame) = you're using it: no more switching
   window.addEventListener("blur", function () { setTimeout(function () { if (W && !W.done && document.activeElement === W.f) settle(false); }, 0); });
   // an ad that tries to send the whole page elsewhere gets a "Leave site?" question instead (laptop browsers)
