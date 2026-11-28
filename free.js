@@ -1,0 +1,999 @@
+/* Vesper web — "Free servers": any film or series can be watched in Vesper through public embed players (VidQueen,
+   VidGold, Cinezo, VsEmbed…), the same way stream-aggregator sites do it: the player is asked for a TMDB id and shows the
+   video in a frame. Titles come from Cinemeta (Stremio's free public catalog: search, posters, IMDb + TMDB ids, episodes),
+   which works straight from the phone with no key and no helper.
+   - every title page gets "Watch free" (catalog titles too, matched by IMDb id)
+   - Search gets a "Free servers" switch → an "On free servers" row (anything Cinemeta knows, not just your apps)
+   - Home / Films / Series get "Watch free" rows from Cinemeta's popular + new lists
+   The players are other sites: no control over their ads or what each server has. */
+(function () {
+  var S = window.VS; if (!S) return;
+  var LS = window.localStorage;
+  function ld(k, d) { try { var v = JSON.parse(LS.getItem("vesper.fs." + k)); return v == null ? d : v; } catch (e) { return d; } }
+  function sv(k, v) { try { LS.setItem("vesper.fs." + k, JSON.stringify(v)); } catch (e) {} }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function norm(s) { return S.norm(s || ""); }
+  var CM = "https://v3-cinemeta.strem.io", MH = "https://images.metahub.space";
+  var ON = ld("on", true), IDS = ld("ids", {}), EPL = ld("ep", {}), CAT = ld("cat", {});
+
+  // ---------- the servers (TMDB id; same order idea as the aggregator: own-brand players first, ad-heavy ones last) ----------
+  var LOOK = "autoplay=true&chromecast=true&servericon=true&setting=true&pip=true&font=Roboto&fontcolor=ffffff&fontsize=20&opacity=0.5&primarycolor=ffffff&secondarycolor=0a0b0d&iconcolor=ffffff&skipintro=true&upnext=false&autonext=false";
+  function brand(host) { return function (ty, id, s, e) { return "https://" + host + (ty === "tv" ? "/embed/tv/" + id + "/" + s + "/" + e : "/embed/movie/" + id) + "?" + LOOK; }; }
+  function path(base, q, pre) { return function (ty, id, s, e) { return base + (pre || "") + (ty === "tv" ? "tv/" + id + "/" + s + "/" + e : "movie/" + id) + (q || ""); }; }
+  // ad: 0 = no ads, "lock" = runs in a locked frame (pop-ups and redirects can't fire), 1 = shows ads (can't be locked: they refuse to play)
+  var SB = "allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock";
+  var SERVERS = [
+    { k: "vidqueen", n: "VidQueen", d: "No ads · best", ad: 0, u: brand("player.vidqueen.st") },
+    { k: "vidgold", n: "VidGold", d: "No ads", ad: 0, u: brand("player.vidgold.net") },
+    { k: "cinezo", n: "Cinezo", d: "Locked · no pop-ups", ad: "lock", u: path("https://player.cinezo.live/", "", "embed/") },
+    { k: "vidrift", n: "VidRift", d: "Locked · subtitles", ad: "lock", u: path("https://embed.vidrift.net/", "?hide=next,episodes", "embed/") },
+    { k: "vidora", n: "Vidora", d: "Locked · no pop-ups", ad: "lock", u: path("https://vidora.ac/", "?autoplay=true") },
+    { k: "kisskh", n: "KissKH", d: "Locked · Asian dramas · subs", ad: "lock", kk: 1, u: null },
+    { k: "vidmario", n: "VidMario", d: "May show ads", ad: 1, u: brand("player.vidmario.net") },
+    { k: "vidlink", n: "VidLink", d: "Ads", ad: 1, u: path("https://vidlink.pro/", "?autoplay=true") },
+    { k: "vidup", n: "Vidup", d: "Ads", ad: 1, u: path("https://vidup.to/", "?autoPlay=true") },
+    { k: "vsembed", n: "VsEmbed", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vsembed.ru/", "", "embed/") },
+    // from 1shows.org's provider list (api.viduki.net/embed_providers?site=1shows) — none of these play in a locked frame
+    { k: "vidfast", n: "VidFast", d: "May show ads", ad: 1, u: path("https://vidfast.pro/", "?autoPlay=true&title=true&poster=true&theme=ffffff") },
+    { k: "vidrock", n: "VidRock", d: "May show ads", ad: 1, u: path("https://vidrock.to/", "?theme=ffffff&autoplay=true&autonext=false&download=false&nextbutton=false&episodeselector=false") },
+    { k: "vidy", n: "Vidy", d: "May show ads", ad: 1, u: path("https://vidy.st/", "?color=ffffff") },
+    { k: "viduki", n: "Viduki", d: "May show ads", ad: 1, quiet: 1, u: path("https://www.viduki.net/1/", "?color=ffffff") },
+    { k: "viduki2", n: "Viduki Multi", d: "Other languages · ads", ad: 1, quiet: 1, u: path("https://www.viduki.net/2/", "?color=ffffff") },
+    { k: "vidzee", n: "VidZee", d: "Ads", ad: 1, u: path("https://player.vidzee.wtf/", "?color=ffffff", "embed/") },
+    { k: "vidbolt", n: "VidBolt", d: "Ads · tap play", ad: 1, quiet: 1, u: path("https://vidbolt.pro/", "?autoPlay=true&nextEpisodeButton=false&episodesButton=false") }
+  ];
+  var NOADS = ld("noads", true);   // keep servers with ads out of the way (default)
+  function adsOk() { return !NOADS || (P && P.allowAds); }
+  // ---------- smart pick: what each server did on THIS device (start time, freezes, misses) decides the order ----------
+  var HEALTH = ld("health", {});
+  function hOf(k) { return HEALTH[k] || (HEALTH[k] = { ok: 0, miss: 0, start: 0, watch: 0, stall: 0, at: 0 }); }
+  function hSave() { sv("health", HEALTH); }
+  function hScore(k) { var h = HEALTH[k]; if (!h || h.ok + h.miss < 1) return null;
+    var rel = (h.ok + 1) / (h.ok + h.miss + 2), smooth = h.watch > 60 ? 1 - Math.min(1, h.stall / h.watch * 4) : 0.85, fast = h.start ? Math.max(0, 1 - h.start / 25000) : 0.6;
+    return rel * 55 + smooth * 30 + fast * 15 + (Date.now() - h.at < 3 * 864e5 && h.ok ? 3 : 0); }
+  function order(all) { var fav = ld("srv", ""), rank = function (x) { return x.kk ? (P && P.asia ? -1 : 1) : x.ad === 0 ? 0 : x.ad === "lock" ? 1 : x.quiet ? 3 : 2; };
+    var l = SERVERS.filter(function (x) { return x.kk ? !!(P && P.kk) : all || x.ad !== 1 || adsOk(); }).sort(function (a, b) {
+      var sa = hScore(a.k), sb = hScore(b.k);
+      return rank(a) - rank(b) || (sa != null && sb != null ? sb - sa : sa != null && sa >= 50 ? -1 : sb != null && sb >= 50 ? 1 : 0) || SERVERS.indexOf(a) - SERVERS.indexOf(b); }); var i = l.findIndex(function (x) { return x.k === fav; }); if (i > 0 && !(P && P.asia && P.kk && l[0].kk)) l.unshift(l.splice(i, 1)[0]); return l; }
+
+  // ---------- titles ----------
+  var BYIMDB = null;
+  function index() { if (BYIMDB) return BYIMDB; BYIMDB = {}; (S.ALL || []).forEach(function (t) { if (t.imdb_id) BYIMDB[t.imdb_id] = t; }); return BYIMDB; }
+  function yr(m) { var y = /\d{4}/.exec(m.releaseInfo || m.year || ""); return y ? +y[0] : 0; }
+  function T(m) {   // a Cinemeta item → Vesper title (the catalog's own one when it's on your apps)
+    var imdb = m.imdb_id || m.id; if (!/^tt\d+$/.test(imdb)) return null;
+    var id = "fs:" + imdb; if (S.T[id]) return S.T[id];
+    var type = m.type === "series" ? "SHOW" : "MOVIE", y = yr(m), cat = index()[imdb];
+    if (!cat) { var k = norm(m.name); cat = (S.ALL || []).filter(function (x) { return x.type === type && norm(x.title) === k && x.year && y && Math.abs(x.year - y) <= 1; })[0]; }
+    if (cat) { cat.fs = { imdb: imdb }; if (!cat.imdb_id) cat.imdb_id = imdb; S.T[id] = cat; return cat; }
+    var t = { id: id, title: m.name, type: type, year: y, genres: [], avail: [], desc: m.description || "", imdb_id: imdb, fs: { imdb: imdb },
+      poster: m.poster && /^https:/.test(m.poster) && !/metahub/.test(m.poster) ? m.poster : MH + "/poster/medium/" + imdb + "/img", backdrop: m.background || MH + "/background/medium/" + imdb + "/img",
+      imdb: +m.imdbRating || 0, cast: m.cast || [], dirs: m.director || [], fsg: m.genres || m.genre || [] };
+    S.T[id] = t; return t;
+  }
+  function can(t) { return !!t && (t.type === "MOVIE" || t.type === "SHOW"); }
+
+  function get(u, ms) {
+    var c = new AbortController(), tm = setTimeout(function () { c.abort(); }, ms || 9000);
+    return fetch(u, { signal: c.signal }).then(function (r) { clearTimeout(tm); if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  // IMDb id → Cinemeta meta (TMDB id, episodes, description). Title-only titles are looked up by name + year first.
+  var META = {};
+  function imdbOf(t) {
+    if (t.imdb_id) return Promise.resolve(t.imdb_id);
+    var full = t._lite && S.full ? new Promise(function (ok) { S.full(t, function () { ok(); }); }) : Promise.resolve();
+    return full.then(function () {
+      if (t.imdb_id) return t.imdb_id;
+      return get(CM + "/catalog/" + (t.type === "SHOW" ? "series" : "movie") + "/top/search=" + encodeURIComponent(t.title) + ".json").then(function (j) {
+        var k = norm(t.title), hit = (j.metas || []).filter(function (m) { return norm(m.name) === k && (!t.year || !yr(m) || Math.abs(yr(m) - t.year) <= 1); })[0];
+        if (!hit) throw new Error("not found"); t.imdb_id = hit.id; return hit.id;
+      });
+    });
+  }
+  function meta(t) {
+    return imdbOf(t).then(function (imdb) {
+      var key = (t.type === "SHOW" ? "series/" : "movie/") + imdb;
+      if (!META[key]) META[key] = get(CM + "/meta/" + key + ".json").then(function (j) { return j.meta || {}; }).catch(function () { delete META[key]; return {}; });
+      return META[key].then(function (m) {
+        var tmdb = m.moviedb_id || IDS[imdb];
+        var done = function (id) { if (id) { IDS[imdb] = id; sv("ids", IDS); } return { imdb: imdb, tmdb: id || null, m: m }; };
+        if (tmdb) return done(tmdb);
+        // Cinemeta doesn't know the TMDB id → Wikidata does for most titles
+        var q = 'SELECT ?a ?b WHERE { ?i wdt:P345 "' + imdb + '". OPTIONAL{?i wdt:P4947 ?a} OPTIONAL{?i wdt:P4983 ?b} } LIMIT 1';
+        return get("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), 12000).then(function (j) {
+          var b = (j.results.bindings || [])[0] || {}; return done(+((b.b && b.b.value) || (b.a && b.a.value)) || null);
+        }).catch(function () { return done(null); });
+      });
+    });
+  }
+  function episodes(m) {   // Cinemeta episode list → [{n, eps:[{s,e,title}]}]
+    var by = {};
+    (m.videos || []).forEach(function (v) { if (!v.season || v.season < 1 || !v.number) return; (by[v.season] = by[v.season] || []).push({ s: v.season, e: v.number, title: v.name || v.title || "Episode " + v.number, date: v.released || v.firstAired }); });
+    return Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return { n: n, eps: by[n].sort(function (a, b) { return a.e - b.e; }) }; });
+  }
+
+  // ---------- the player ----------
+  var css = document.createElement("style");
+  css.textContent =
+    ".fsp{position:fixed;inset:0;z-index:300;background:#000;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .2s}" +
+    ".fsp.on{opacity:1;pointer-events:auto}" +
+    ".fsbar{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;color:#fff;min-height:44px}" +
+    ".fsbar button{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:99px;height:36px;min-width:36px;padding:0 12px;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer}" +
+    ".fsbar [data-fsdock]{display:none}.fsbar .fsx{font-size:22px;line-height:1;padding:0;width:36px}" +
+    ".fst{flex:1;min-width:0}.fst b{display:block;font:700 16px -apple-system,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+    ".fst small{display:block;color:rgba(255,255,255,.6);font:500 12.5px -apple-system,system-ui,sans-serif;margin-top:1px}" +
+    ".fsv{position:relative;width:100%;aspect-ratio:16/9;background:#050508;flex:none}" +
+    ".fsv iframe{position:absolute;inset:0;width:100%;height:100%;border:0}" +
+    ".fsmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:rgba(255,255,255,.75);font:500 14px -apple-system,system-ui,sans-serif;pointer-events:none}" +
+    ".fsdock{flex:1;overflow-y:auto;padding:14px 12px calc(env(safe-area-inset-bottom) + 18px);color:#fff;font-family:-apple-system,system-ui,sans-serif}" +
+    ".fsh{font:700 13px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.06em;margin:4px 2px 9px}" +
+    ".fsrv{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;margin-bottom:18px}" +
+    ".fsrv button{background:rgba(255,255,255,.07);border:1.5px solid transparent;border-radius:12px;color:#fff;text-align:left;padding:10px 12px;cursor:pointer;font:inherit}" +
+    ".fsrv button b{display:block;font-size:14.5px}.fsrv button small{color:rgba(255,255,255,.55);font-size:12px}" +
+    ".fsrv button.on{border-color:#fff;background:rgba(255,255,255,.14)}" +
+    ".fsep{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}" +
+    ".fsep select{flex:1;min-width:120px;height:40px;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;border:0;padding:0 10px;font:600 14px -apple-system,system-ui,sans-serif}" +
+    ".fsep button{height:40px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;padding:0 14px;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer}" +
+    ".fsauto{position:absolute;left:10px;right:10px;bottom:10px;z-index:2;display:flex;align-items:center;gap:10px;background:rgba(10,10,14,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:12px;padding:9px 10px 9px 14px;color:#fff;font:500 13.5px -apple-system,system-ui,sans-serif}" +
+    ".fsauto span{flex:1}.fsauto button{border:0;border-radius:99px;background:#fff;color:#000;font:600 13px -apple-system,system-ui,sans-serif;padding:7px 13px;cursor:pointer}.fsauto button.g{background:rgba(255,255,255,.16);color:#fff}" +
+    ".fsrv button.bad{opacity:.45}.fsrv button.ok small{color:#7be0a8}" +
+    ".fsbest{display:inline-block;font:800 9.5px -apple-system,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#04140b;background:#3fcf8e;border-radius:5px;padding:2px 6px;margin-bottom:5px}" +
+    ".fsst{display:block;font-style:normal;font-size:11px;color:#7be0a8;margin-top:3px}" +
+    ".fsok{color:#7be0a8;font-size:12px}.fslk{font-size:11px}.fsadh{display:flex;align-items:center;gap:10px}.fsadsw{border:0;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font:700 11px -apple-system,system-ui,sans-serif;padding:4px 10px;text-transform:none;letter-spacing:0;cursor:pointer}.fsadsw.on{background:#f3a46b;color:#1a0d05}" +
+    ".fsrvad button{opacity:.72}.fsrvad button.on{opacity:1}" +
+    ".fsbar .fsmx{font-size:17px;padding:0;width:36px}" +
+    ".fsmaxx{display:none;position:absolute;top:8px;left:50%;margin-left:-18px;z-index:6;width:36px;height:36px;border-radius:99px;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:15px;opacity:.55}" +
+    ".fsp.max .fsbar,.fsp.max .fsdock{display:none}.fsp.max .fsmaxx{display:block}.fsp.mxhint .fsmaxx{opacity:1}" +
+    ".fsp.max{background:#000}" +
+    ".fsp.max .fsv{position:fixed;left:env(safe-area-inset-left);top:0;width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));height:100vh;height:100dvh;aspect-ratio:auto;z-index:5;background:#000;flex:none}" +
+    // turned sideways: keep clear of the notch (phone's top) and the home bar (phone's bottom)
+    ".fsp.max.rot .fsv{width:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));height:100vw;left:50%;top:calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2);transform:translate(-50%,-50%) rotate(90deg)}" +
+    "html.fspin,html.fspin body{overflow:hidden!important;overscroll-behavior:none}" +
+    ".fsp.pin .fsbar,.fsp.pin .fsdock,.fsp.pin .fsmaxx,.fsp.pin .fsauto{display:none!important}" +
+    ".fsp.pin .fsv{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;aspect-ratio:auto!important;transform:none!important;margin:0!important;background:#000!important;z-index:2147483000!important}" +
+    ".fsv.kk{overflow:hidden;background:#000}.fsv.kk iframe{inset:auto;position:absolute}" +
+    "html.desk .fsp:not(.max) .fsv.kk{height:auto;aspect-ratio:16/9;align-self:flex-start}" +
+    ".fssub{position:absolute;left:6%;right:6%;bottom:9%;z-index:4;text-align:center;pointer-events:none;opacity:0;transition:opacity .15s;color:#fff;font:600 clamp(15px,4.2vw,30px)/1.3 -apple-system,system-ui,sans-serif;text-shadow:0 0 3px #000,0 1px 3px #000,0 0 10px rgba(0,0,0,.8)}" +
+    ".fsp:not(.max):not(.pin) .fssub{font-size:clamp(13px,3.6vw,22px)}" +
+    ".fsv:has(.fsauto) .fssub{bottom:calc(9% + 58px)}" +
+    ".fssubs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.fssubs select{flex:1;min-width:130px;height:40px;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;border:0;padding:0 10px;font:600 14px -apple-system,system-ui,sans-serif}" +
+    ".fssubs button,.fsfile{height:40px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;padding:0 13px;font:600 13.5px -apple-system,system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center}" +
+    ".fssync{display:flex;align-items:center;gap:10px;margin-top:8px}.fssync button{height:34px;border-radius:9px;border:0;background:rgba(255,255,255,.1);color:#fff;padding:0 12px;font:600 13px -apple-system,system-ui,sans-serif;cursor:pointer}.fssync span{font:600 13px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.7);min-width:64px;text-align:center}" +
+    ".cwnew{position:absolute;left:10px;top:10px;font:800 9.5px -apple-system,system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;background:#e50914;color:#fff;padding:3px 7px;border-radius:4px}" +
+    ".fstag{margin-left:9px;font:800 10.5px -apple-system,system-ui,sans-serif;letter-spacing:.04em;padding:3px 7px;border-radius:5px;background:#3fcf8e;color:#04140b}" +
+    ".fsnote{color:rgba(255,255,255,.45);font-size:12.5px;line-height:1.45;margin:6px 2px}" +
+    ".btn.free{background:rgba(255,255,255,.14);color:#fff}.btn.play.big.free{background:#fff;color:#000}" +
+    ".pc .fsbar0{position:absolute;left:6px;right:6px;bottom:5px;height:3px;border-radius:2px;background:rgba(255,255,255,.28);z-index:3;overflow:hidden}.pc .fsbar0 i{display:block;height:100%;background:#e50914}" +
+    ".pc .fsse{position:absolute;right:6px;top:6px;font:800 9.5px -apple-system,system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.66);padding:2px 5px;border-radius:4px;z-index:3}" +
+    ".srcs{margin:4px 0 22px;border-radius:16px;background:rgba(255,255,255,.045);padding:14px 14px 6px}.srch{font:700 12px -apple-system,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:10px}" +
+    ".src{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;padding:0 0 12px;cursor:pointer}.src.own{cursor:default}" +
+    ".sic{flex:none;width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:900 15px -apple-system,system-ui,sans-serif}" +
+    ".sic.logos{display:grid;grid-template-columns:repeat(3,13px);gap:2.5px;align-content:center;justify-content:center;background:rgba(255,255,255,.08)}.sic.logos img{width:13px;height:13px;border-radius:3px}" +
+    ".sic.sbx{background:#f3a46b;color:#1a0d05}.sic.fsx{background:#3fcf8e;color:#04140b}" +
+    ".stx{min-width:0}.stx b{display:flex;align-items:center;gap:8px;font-size:15px}.stx b em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7be0a8}" +
+    ".stx b i{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.6)}.stx b i.on{background:#3fcf8e;color:#04140b}" +
+    ".stx small{display:block;color:rgba(255,255,255,.55);font-size:12.5px;line-height:1.35;margin-top:2px}" +
+    ".sbres:not(.fsres)>.row-h::before,.fsres>.row-h::before{content:'SB';display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;margin-right:8px;vertical-align:-3px;font:900 8.5px -apple-system,system-ui,sans-serif;background:#f3a46b;color:#1a0d05}" +
+    ".fsres>.row-h::before{content:'▶';font-size:9px;background:#3fcf8e;color:#04140b}" +
+    ".cwc{flex:none;width:68vw;max-width:340px;scroll-snap-align:start;cursor:pointer}" +
+    ".cwa{position:relative;aspect-ratio:16/9;border-radius:9px;overflow:hidden;background:#15151e;box-shadow:0 6px 18px rgba(0,0,0,.3)}" +
+    ".cwa img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}.cwa img.ok{opacity:1}" +
+    ".cwg{position:absolute;inset:0;background:linear-gradient(transparent 35%,rgba(0,0,0,.82))}" +
+    ".cwp{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);width:42px;height:42px;border-radius:99px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.75);display:flex;align-items:center;justify-content:center;color:#fff;padding-left:3px}" +
+    ".cwt{position:absolute;left:12px;right:12px;bottom:12px;color:#fff}.cwt b{display:block;font:800 15px -apple-system,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cwt small{font:600 11.5px -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.72)}" +
+    ".cwb{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.25)}.cwb i{display:block;height:100%;background:#e50914}" +
+    "html.desk .cwc{width:340px}" +
+    ".fest{padding:0 16px}.fsc{position:relative;overflow:hidden;border-radius:16px;padding:22px 18px 18px;min-height:210px;display:flex;align-items:center;box-shadow:0 14px 40px -18px rgba(0,0,0,.7)}" +
+    ".fsl8{position:absolute;left:0;right:0;top:0;height:20px;display:flex;justify-content:space-around;border-top:1.5px solid rgba(255,255,255,.18)}.fsl8 i{width:6px;height:9px;border-radius:0 0 4px 4px;margin-top:1px;opacity:.85}" +
+    ".fsl8 i:nth-child(4n+1){background:#e3343c;box-shadow:0 0 8px #e3343c}.fsl8 i:nth-child(4n+2){background:#f5c542;box-shadow:0 0 8px #f5c542}.fsl8 i:nth-child(4n+3){background:#3fcf8e;box-shadow:0 0 8px #3fcf8e}.fsl8 i:nth-child(4n){background:#5aa7ff;box-shadow:0 0 8px #5aa7ff}" +
+    ".fsx1{position:relative;z-index:1;max-width:58%;color:#fff}.fscd{display:inline-block;font:700 11px -apple-system,system-ui,sans-serif;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--acc) 60%,transparent);margin-bottom:9px}" +
+    ".fsx1 h3{font:italic 700 25px/1.08 Georgia,'Times New Roman',serif;letter-spacing:-.3px;margin:0 0 6px;color:#fff6ea}.fsx1 p{font:500 12.5px/1.35 -apple-system,system-ui,sans-serif;color:rgba(255,255,255,.72);margin:0 0 13px}" +
+    ".fsbt{display:flex;gap:8px}.fsgo{white-space:nowrap;border:0;border-radius:99px;background:var(--acc);color:#fff;font:700 13px -apple-system,system-ui,sans-serif;padding:9px 15px;cursor:pointer}.fsdice{border:1px solid rgba(255,255,255,.25);border-radius:99px;background:rgba(0,0,0,.2);color:#fff;font-size:15px;width:38px;cursor:pointer}" +
+    ".fsfan{position:absolute;right:-6px;top:50%;width:46%;height:76%;transform:translateY(-50%)}" +
+    ".fsfan img{position:absolute;left:50%;top:50%;width:44%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;box-shadow:0 10px 24px rgba(0,0,0,.5);transform:translate(calc(-50% + var(--i) * 34%),-50%) rotate(calc(var(--i) * 6deg));cursor:pointer}" +
+    "html.desk .fest{padding:0 4%}html.desk .fsc{min-height:300px;padding:34px 40px}html.desk .fsx1 h3{font-size:40px}html.desk .fsx1 p{font-size:15px}html.desk .fsfan{width:44%;right:2%}html.desk .fsfan img{width:30%}" +
+    ".sbl.fsl{background:rgba(80,200,140,.92);color:#04140b}" +
+    "html.desk .fsp{flex-direction:row;flex-wrap:wrap;align-content:flex-start}html.desk .fsbar{width:100%}" +
+    "html.desk .fsv{width:auto;flex:1 1 640px;aspect-ratio:auto;height:calc(100vh - 62px)}html.desk .fsdock{flex:0 0 320px;height:calc(100vh - 62px)}" +
+    "@media (orientation:landscape) and (max-height:520px){.fsp{flex-direction:row;flex-wrap:wrap}.fsbar{position:absolute;top:0;left:0;right:0;z-index:2;background:linear-gradient(#000c,#0000);transition:opacity .3s}" +
+    ".fsbar [data-fsdock]{display:block}.fsp.quiet .fsbar{opacity:0;pointer-events:none}.fsv{width:100%;height:100%;aspect-ratio:auto}.fsdock{display:none}.fsp.dock .fsdock{display:block;position:absolute;right:0;top:0;bottom:0;width:300px;background:#0b0b10f2;z-index:3;padding-top:calc(env(safe-area-inset-top) + 56px)}}";
+  document.head.appendChild(css);
+
+  // ---------- KissKH: index built daily by the site's bot (kisskh/index.json + kisskh/eNN.json episode shards) ----------
+  var ASIA = { KR: 1, JP: 1, CN: 1, TW: 1, HK: 1, TH: 1, PH: 1, VN: 1, ID: 1, MY: 1, SG: 1 };
+  function asia(t) { return (t.countries || []).some(function (c) { return ASIA[c]; }); }
+  var KK = null, KKP = null, KKS = {};
+  function kkBase(s) { return norm(String(s || "").replace(/\s*\((19|20)\d\d\)\s*$/, "")); }
+  function kkIndex() {
+    if (KKP) return KKP;
+    KKP = fetch("kisskh/index.json?d=" + new Date().toISOString().slice(0, 10)).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+      KK = j.t.map(function (r) { return { id: r[0], title: r[1], k: kkBase(r[1]), y: r[2], ty: r[3], cc: r[4], n: r[5] }; }); return KK;
+    }).catch(function () { KKP = null; return []; });
+    return KKP;
+  }
+  function kkShard(id) { var n = id % 64, k = (n < 10 ? "0" : "") + n;
+    if (!KKS[k]) KKS[k] = fetch("kisskh/e" + k + ".json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { delete KKS[k]; return {}; });
+    return KKS[k].then(function (s) { return s[id] || null; }); }
+  function kkFind(t, season) {   // → { id, e: [[number, episodeId]], th } or null
+    var show = t.type === "SHOW";
+    if (t.kk && (!show || !season || season === 1)) return kkShard(t.kk).then(function (x) { return x ? { id: t.kk, e: x.e, th: x.th } : null; });
+    return kkIndex().then(function (L) {
+      var base = kkBase(t.title), keys = show && season > 1 ? [base + " season " + season, base + " " + season, base + " s" + season] : [base];
+      var hit = L.filter(function (r) { return keys.indexOf(r.k) >= 0 && (show ? r.ty === "S" || r.ty === "A" : r.ty === "M" || r.ty === "H") &&
+        (!r.y || !t.year || (show && season > 1) || Math.abs(r.y - t.year) <= 1); })[0];
+      return hit ? kkShard(hit.id).then(function (x) { return x ? { id: hit.id, e: x.e, th: x.th, cc: hit.cc } : null; }) : null;
+    }).catch(function () { return null; });
+  }
+  function kkT(r, th) {   // a KissKH-only title for search results
+    var id = "kk:" + r.id; if (S.T[id]) return S.T[id];
+    var type = r.ty === "S" || r.ty === "A" ? "SHOW" : "MOVIE", nm = String(r.title).replace(/\s*\((19|20)\d\d\)\s*$/, ""), k = norm(nm);
+    var cat = (S.ALL || []).filter(function (x) { return x.type === type && norm(x.title) === k && (!r.y || !x.year || Math.abs(x.year - r.y) <= 1); })[0];
+    if (cat) { cat.kk = r.id; S.T[id] = cat; return cat; }
+    var t = { id: id, title: nm, type: type, year: r.y || 0, genres: [], avail: [], countries: r.cc ? [r.cc] : [], desc: "", poster: th || "", backdrop: th || "", fs: { imdb: null }, kk: r.id };
+    S.T[id] = t; return t;
+  }
+  function kkSearch(q, TY) {
+    var words = norm(q).split(" ").filter(Boolean); if (!words.length) return Promise.resolve([]);
+    return kkIndex().then(function (L) {
+      var qn = words.join(" "), hits = L.filter(function (r) { var ty = r.ty === "S" || r.ty === "A" ? "SHOW" : "MOVIE"; return (!TY || ty === TY) && words.every(function (w) { return (" " + r.k + " ").indexOf(" " + w) >= 0; }); });
+      hits.sort(function (a, b) { return (b.k === qn) - (a.k === qn) || (b.k.indexOf(qn) === 0) - (a.k.indexOf(qn) === 0); });
+      hits = hits.slice(0, 14);
+      return Promise.race([Promise.all(hits.map(function (r) { return kkShard(r.id); })), new Promise(function (ok) { setTimeout(function () { ok([]); }, 3000); })])
+        .then(function (ths) { return hits.map(function (r, i) { return kkT(r, ths[i] && ths[i].th); }); });
+    });
+  }
+
+  var el = null, P = null, quietT = null;
+  function build() {
+    if (el) return el;
+    el = document.createElement("div"); el.className = "fsp"; el.id = "fsp";
+    el.innerHTML = '<div class="fsbar"><button class="fsx" data-fsx aria-label="Close">‹</button><div class="fst"><b></b><small></small></div><button class="fsmx" data-fsmax aria-label="Full screen">⤢</button><button data-fsdock>Servers</button></div>' +
+      '<div class="fsv"><div class="fsmsg"></div><button class="fsmaxx" data-fsmax aria-label="Exit full screen">✕</button></div><div class="fsdock"></div>';
+    document.body.appendChild(el);
+    el.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-fsx")) return close();
+      if (b.hasAttribute("data-fsdock")) { el.classList.toggle("dock"); return; }
+      if (b.hasAttribute("data-fsmax")) return maxi(!el.classList.contains("max"));
+      if (b.dataset.srv) { P.srv = b.dataset.srv; P.auto = 0; return load(); }
+      if (b.hasAttribute("data-fsnexts")) { if (W && W.k === P.srv) { W.done = 0; return fail("user"); } var l = order(), j = l.findIndex(function (x) { return x.k === P.srv; }); P.srv = l[(j + 1) % l.length].k; return load(); }
+      if (b.hasAttribute("data-fsstay")) { if (FL && FL.offered) { FL.at = Date.now(); FL.offered = 0; banner(null); return; } return settle(false); }
+      if (b.hasAttribute("data-fsgo")) { if (W && W.done && FL && FL.offered) { W.done = 0; P.resume = FL.t; } return fail(FL && FL.offered ? "stuck" : "user"); }
+      if (b.hasAttribute("data-fsads")) { P.allowAds = 1; var na = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (na) { P.srv = na.k; P.auto = 1; load(); } return; }
+      if (b.hasAttribute("data-fsadsw")) { NOADS = !NOADS; sv("noads", NOADS); return dock(); }
+      if (b.hasAttribute("data-fsretry")) { P.bad = {}; P.auto = 1; P.srv = order()[0].k; return load(); }
+      if (b.dataset.fsoff) { SUB.off = Math.round((SUB.off + +b.dataset.fsoff) * 10) / 10; sv("suboff:" + (P.imdb || P.t.id), SUB.off); subTick(); return dock(); }
+      if (b.hasAttribute("data-fssn")) { var n = (SUB.list || []).filter(function (s) { return s.lang === SUB.lang; }).length; return subUse(SUB.lang, ((SUB.nth || 0) + 1) % n); }
+      if (b.hasAttribute("data-fsnow")) { if (UN) clearInterval(UN.tick); banner(null); return step(1); }
+      if (b.hasAttribute("data-fsuncancel")) { if (UN) { clearInterval(UN.tick); UN.left = 0; } banner(null); return; }
+      if (b.hasAttribute("data-fsprev")) return step(-1);
+      if (b.hasAttribute("data-fsnext")) return step(1);
+    });
+    el.addEventListener("change", function (e) {
+      if (e.target.matches("[data-fss]")) { var s = +e.target.value, ss = P.ss.filter(function (x) { return x.n === s; })[0]; P.s = s; P.e = ss ? ss.eps[0].e : 1; P.bad = {}; P.auto = 1; load(); }
+      if (e.target.matches("[data-fssl]")) { var v = e.target.value; if (v === "own") return; if (SUB.src === "own") { try { LS.removeItem("vesper.fs.subown:" + subKey()); } catch (x) {} } return subUse(v); }
+      if (e.target.matches("[data-fsfile]")) return subFile(e.target.files && e.target.files[0]);
+      if (e.target.matches("[data-fse]")) { P.e = +e.target.value; P.bad = {}; P.auto = 1; load(); }
+    });
+    window.addEventListener("resize", function () { if (el.classList.contains("max")) maxi(true); else fitKK(); });
+    // landscape phone: tap shows the bar for a few seconds
+    el.addEventListener("touchstart", function () { el.classList.remove("quiet"); clearTimeout(quietT); quietT = setTimeout(function () { if (!el.classList.contains("dock")) el.classList.add("quiet"); }, 3500); }, { passive: true });
+    return el;
+  }
+  // Full screen in Vesper itself (iPhone won't let a player inside a frame go full screen): the picture fills the
+  // screen, turned sideways when the phone is held upright, so it's landscape even with rotation locked
+  function maxi(on) {
+    el.classList.toggle("max", on); el.classList.toggle("rot", on && window.innerHeight > window.innerWidth);
+    fitKK();
+    if (on) { el.classList.add("mxhint"); setTimeout(function () { el.classList.remove("mxhint"); }, 2500); }
+  }
+  // KissKH's page: hide its header and size the frame so its video fills our box
+  function fitKK() {
+    var box = el && el.querySelector(".fsv"), f = box && box.querySelector("iframe"); if (!f || !box.classList.contains("kk")) return;
+    var W0 = box.clientWidth, H0 = box.clientHeight;   // layout size (already sideways when turned)
+    var w = Math.min(W0, H0 * 16 / 9), hdr = w >= 768 ? 64 : 56;
+    f.style.width = w + "px"; f.style.left = (W0 - w) / 2 + "px"; f.style.top = (H0 - w * 9 / 16) / 2 - hdr + "px"; f.style.height = (w * 9 / 16 + hdr) + "px";
+  }
+  function pin(on) { if (!el) return; el.classList.toggle("pin", on); document.documentElement.classList.toggle("fspin", on); }
+  function step(d) {
+    var flat = []; (P.ss || []).forEach(function (s) { s.eps.forEach(function (x) { flat.push(x); }); });
+    var i = flat.findIndex(function (x) { return x.s === P.s && x.e === P.e; }), n = flat[i + d]; if (!n) return;
+    P.s = n.s; P.e = n.e; P.bad = {}; P.auto = 1; if (P.okk) P.srv = P.okk; P.okk = null; load();
+  }
+  function dock() {
+    var d = el.querySelector(".fsdock"), html = "";
+    if (P.t.type === "SHOW" && P.ss && P.ss.length) {
+      var cur = P.ss.filter(function (x) { return x.n === P.s; })[0] || P.ss[0];
+      html += '<div class="fsh">Episode</div><div class="fsep"><select data-fss>' + P.ss.map(function (s) { return '<option value="' + s.n + '"' + (s.n === P.s ? " selected" : "") + ">Season " + s.n + "</option>"; }).join("") + "</select>" +
+        '<select data-fse>' + cur.eps.map(function (x) { return '<option value="' + x.e + '"' + (x.e === P.e ? " selected" : "") + ">" + x.e + ". " + esc(x.title) + "</option>"; }).join("") + "</select>" +
+        '<button data-fsprev>‹ Prev</button><button data-fsnext>Next ›</button></div>';
+    }
+    var best = order().filter(function (x) { return hScore(x.k) != null; }).sort(function (a, b) { return hScore(b.k) - hScore(a.k); })[0];
+    function stat(k) { var h = HEALTH[k]; if (!h || h.ok < 1) return ""; var s = Math.round((h.start || 0) / 1000), sm = h.watch > 60 ? (h.stall / h.watch < 0.02 ? "smooth" : h.stall / h.watch < 0.08 ? "a few pauses" : "often freezes") : "";
+      return '<em class="fsst">' + (s ? "starts ~" + s + "s" : "") + (s && sm ? " · " : "") + sm + "</em>"; }
+    function cell(x) { return '<button data-srv="' + x.k + '"' + (x.k === P.srv ? ' class="on"' : "") + ">" + (best && best.k === x.k ? '<span class="fsbest">Best for you</span>' : "") + "<b>" + x.n + (x.ad === 0 ? ' <span class="fsok">✓</span>' : x.ad === "lock" ? ' <span class="fslk">🔒</span>' : "") + "</b><small>" + x.d + "</small>" + stat(x.k) + "</button>"; }
+    var all = order(true), clean = all.filter(function (x) { return x.ad !== 1; }), ads = all.filter(function (x) { return x.ad === 1; });
+    html += subDock();
+    html += '<div class="fsh">Ad-free servers</div><div class="fsrv">' + clean.map(cell).join("") + "</div>" +
+      '<div class="fsh fsadh">Servers with ads <button class="fsadsw' + (NOADS ? "" : " on") + '" data-fsadsw>' + (NOADS ? "Skipped" : "Used too") + "</button></div>" +
+      (NOADS && !(P && P.allowAds) ? '<p class="fsnote" style="margin-top:-2px">Vesper only tries these when no ad-free server has the title. You can still tap one.</p>' : "") +
+      '<div class="fsrv fsrvad">' + ads.map(cell).join("") + "</div>" +
+      '<button class="fsnx" data-fsnexts style="width:100%;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 14px -apple-system,system-ui,sans-serif;cursor:pointer">Not playing? Try the next server</button>' +
+      '<p class="fsnote">Free players from other sites. If one shows nothing, Vesper moves to the next by itself — tap the picture or Stay to keep one. 🔒 servers run locked, so their pop-up and redirect ads can’t open. Ads drawn inside a player’s own picture can’t be removed from outside it.</p>';
+    d.innerHTML = html; mark();
+  }
+  function load() {
+    var sv0 = SERVERS.filter(function (x) { return x.k === P.srv; })[0] || SERVERS[0], box = el.querySelector(".fsv"), msg = box.querySelector(".fsmsg");
+    var old = box.querySelector("iframe");
+    var tv = P.t.type === "SHOW";
+    el.querySelector(".fst small").textContent = (tv ? "S" + P.s + " · E" + P.e + " · " : "") + sv0.n;
+    dock();
+    var src = null;
+    box.classList.toggle("kk", !!sv0.kk);
+    if (sv0.kk) {
+      if (tv && P.kkS !== P.s) {   // another season = another KissKH title
+        msg.textContent = "Finding season " + P.s + " on KissKH…"; var s0 = P.s, my0 = P;
+        kkFind(P.t, P.s).then(function (k) { if (P !== my0 || P.s !== s0) return; P.kk = k || P.kk; P.kkS = k ? s0 : -1; if (!k) { P.bad.kisskh = 1; var nx0 = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (nx0) P.srv = nx0.k; } load(); });
+        if (old) old.remove(); return;
+      }
+      var ep = P.kk && (tv ? P.kk.e.filter(function (x) { return x[0] === P.e; })[0] : P.kk.e[P.kk.e.length - 1]);
+      if (!ep) { P.bad.kisskh = 1; var nx = order().filter(function (x) { return !P.bad[x.k]; })[0]; if (nx && nx.k !== "kisskh") { P.srv = nx.k; return load(); } msg.textContent = "KissKH doesn’t have this episode."; return; }
+      src = "https://kisskh.is/Drama/x/Episode-" + ep[0] + "?id=" + P.kk.id + "&ep=" + ep[1];
+    } else {
+      if (!P.tmdb) { if (old) old.remove(); msg.textContent = P.err || "Finding this title…"; return; }
+      src = sv0.u(tv ? "tv" : "movie", P.tmdb, P.s, P.e);
+    }
+    var cur = box.querySelector("iframe"); if (cur && cur.dataset.src === src) return;   // already showing it
+    if (cur) cur.remove();
+    pin(false);   // a new player starts out of full screen
+    msg.textContent = "Loading " + sv0.n + "…";
+    var f = document.createElement("iframe"); f.dataset.src = src;
+    f.setAttribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
+    f.setAttribute("allowfullscreen", ""); f.setAttribute("referrerpolicy", "origin");
+    if (sv0.ad === "lock") f.setAttribute("sandbox", SB);   // pop-up and redirect ads can't fire from in here
+    f.src = src;
+    f.onload = function () { msg.textContent = ""; if (sv0.kk && W && W.f === f && !W.done) settle(true); };
+    box.insertBefore(f, box.firstChild); fitKK();
+    if (tv && P.imdb) { EPL[P.imdb] = { s: P.s, e: P.e, at: Date.now() }; var ks = Object.keys(EPL); if (ks.length > 300) delete EPL[ks[0]]; sv("ep", EPL); }
+    watch(sv0, f); subFor();
+    if (P.resume) { var rs = P.resume; P.resume = 0; setTimeout(function () { if (!W || W.tick) return; banner("<span>Last time you stopped at <b>" + clock(rs) + "</b> — skip there in the player.</span>"); setTimeout(function () { var b = el && el.querySelector(".fsauto"); if (b && /stopped at/.test(b.textContent)) banner(null); }, 9000); }, 1500); }
+  }
+  // ---------- Continue watching: where you stopped, per title (from the players' own time reports) ----------
+  var CW = ld("cw", {}), cwT = 0;
+  function prog(cur, dur) {
+    if (!P || !P.imdb) return; var t = P.t, now = Date.now(); if (now - cwT < 5000) return; cwT = now;
+    var left = dur - cur, done = cur / dur > 0.93 || left < 240;
+    if (done && t.type !== "SHOW") { delete CW[P.imdb]; sv("cw", CW); return; }
+    CW[P.imdb] = { id: t.id, imdb: P.imdb, name: t.title, type: t.type === "SHOW" ? "series" : "movie", y: t.year || 0, poster: /^https:/.test(t.poster || "") ? t.poster : null,
+      s: P.s, e: P.e, c: Math.round(cur), d: Math.round(dur), at: now, fin: done ? 1 : 0 };
+    var ks = Object.keys(CW).sort(function (a, b) { return CW[b].at - CW[a].at; }); ks.slice(40).forEach(function (k) { delete CW[k]; }); sv("cw", CW);
+  }
+  function cwTitle(x) { return S.T[x.id] || T({ id: x.imdb, name: x.name, type: x.type, releaseInfo: String(x.y || ""), poster: x.poster }); }
+  function cwList() { return Object.keys(CW).map(function (k) { return CW[k]; }).sort(function (a, b) { return b.at - a.at; }).map(function (x) { var t = cwTitle(x); if (t) t._cw = x; return t; }).filter(Boolean); }
+  function clock(s) { s = Math.round(s); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return (h ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (ss < 10 ? "0" : "") + ss; }
+  // progress bar on a card (m.js poster() asks)
+  function bar(t) { var x = t && t.imdb_id && CW[t.imdb_id]; if (!x || !x.d) return "";
+    return '<div class="fsbar0"><i style="width:' + Math.max(4, Math.min(100, x.c / x.d * 100)).toFixed(0) + '%"></i></div>' + (x.type === "series" ? '<div class="fsse">S' + x.s + " · E" + x.e + "</div>" : ""); }
+  // ---------- autopilot: no picture from a server → move on to the next one until something plays ----------
+  // Most players tell the page what they're doing (postMessage PLAYER_EVENT with currentTime/duration); a few say nothing.
+  var W = null, autoT = null, tickT = null;
+  // iPhone/iPad: players wait for your tap (no autoplay with sound) and stay silent until then, and a tap inside the
+  // player isn't reliably reported — so silence there means nothing. Only a player's own error moves on by itself;
+  // otherwise Vesper just offers the next server. (Laptops keep the full autopilot.)
+  var TOUCH = !!(window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches);
+  function banner(html) { var box = el.querySelector(".fsv"), b = box.querySelector(".fsauto"); if (!html) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement("div"); b.className = "fsauto"; box.appendChild(b); } b.innerHTML = html; }
+  function settle(ok) {   // this server works (ok) — stop the autopilot
+    clearTimeout(autoT); clearInterval(tickT); banner(null); if (!W) return; W.done = 1;
+    if (ok && P && !W.learned) { W.learned = 1; var hh = hOf(W.k), ms = Date.now() - W.t0; hh.ok++; hh.at = Date.now(); hh.start = hh.start ? hh.start * 0.7 + ms * 0.3 : ms; hSave(); setTimeout(function () { if (P && el) dock(); }, 0); }
+    if (ok && P) { P.okk = W.k; sv("srv", W.k); var sub = el.querySelector(".fst small"); if (sub && !/found/.test(sub.textContent)) sub.textContent += " · found"; mark(); }
+  }
+  function mark() { [].forEach.call(el.querySelectorAll(".fsrv [data-srv]"), function (b) { b.classList.toggle("bad", !!(P.bad && P.bad[b.dataset.srv])); b.classList.toggle("ok", P.okk === b.dataset.srv); }); }
+  function fail(why) {
+    if (!W || W.done || !P) return; W.done = 1; clearTimeout(autoT); clearInterval(tickT);
+    P.bad = P.bad || {}; P.bad[W.k] = 1; if (why !== "user") { hOf(W.k).miss++; hSave(); }
+    var l = order(), nx = l.filter(function (x) { return !P.bad[x.k]; })[0];
+    if (!nx && !adsOk()) { banner('<span>The ad-free servers don’t have this one.</span><button data-fsads>Try ones with ads</button>'); return; }
+    if (!nx) { banner('<span>None of the servers had this one. Try them again in a bit.</span><button class="g" data-fsretry>Retry</button>'); return; }
+    var from = (SERVERS.filter(function (x) { return x.k === W.k; })[0] || {}).n;
+    P.srv = nx.k; P.auto = 1; load();
+    banner("<span>" + esc(from) + " had nothing — trying " + esc(nx.n) + "…</span>"); setTimeout(function () { if (W && !W.done && W.k === nx.k && !W.tick) banner(null); }, 3500);
+  }
+  function watch(sv0, frame) {
+    clearTimeout(autoT); clearInterval(tickT); banner(null);
+    W = { k: sv0.k, f: frame, done: 0, t0: Date.now() };
+    if (!P.auto && P.srv === P.okk) { W.done = 1; return; }
+    if (sv0.kk) return;   // settles when its page loads (we already know KissKH has this episode)
+    if (sv0.quiet) {   // these never tell us anything: stop here and let you press play
+      W.done = 1; if (P.auto) banner('<span>' + esc(sv0.n) + ' — tap play in the picture.</span><button class="g" data-fsnexts>Next server</button>'); return; }
+    var wait = sv0.k === "vidqueen" || sv0.k === "vidgold" || sv0.k === "vidmario" ? 20000 : 12000, my = W;
+    if (TOUCH) {
+      autoT = setTimeout(function () { if (W !== my || my.done) return;
+        banner('<span>Tap ▶ in the picture to start. Nothing there?</span><button class="g" data-fsgo>Next server</button>');
+        setTimeout(function () { if (W === my && !my.done) banner(null); }, 10000); }, wait + 8000);
+      return;
+    }
+    autoT = setTimeout(function () { if (W !== my || my.done) return;
+      var left = 6; my.tick = 1;
+      function draw() { banner('<span>No picture from ' + esc(sv0.n) + " yet — next server in " + left + "s</span><button data-fsstay>Stay</button><button class=\"g\" data-fsgo>Next</button>"); }
+      draw(); tickT = setInterval(function () { if (W !== my || my.done) return clearInterval(tickT); if (--left <= 0) { clearInterval(tickT); fail("timeout"); } else draw(); }, 1000);
+    }, wait);
+  }
+  window.addEventListener("message", function (e) {
+    if (!W || !P || !W.f || e.source !== W.f.contentWindow) return;
+    var d = e.data; if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } } if (!d || typeof d !== "object") return;
+    var ev = d.type === "PLAYER_EVENT" && d.data ? d.data : null;
+    if (ev) {
+      // VidQueen / VidGold / VidMario on iPhone: their own full screen only fills their frame, so they ask the page to
+      // let the frame cover the whole screen while it lasts (same as the aggregator site does)
+      if (ev.event === "fullscreen-enter" || ev.event === "fullscreen-exit") { pin(ev.event === "fullscreen-enter"); return; }
+      if (ev.event === "play" || ev.event === "playing" || +ev.duration > 0 || +ev.currentTime > 0.3) { if (!W.done) settle(true); }
+      if (+ev.currentTime > 0 && +ev.duration > 0) prog(+ev.currentTime, +ev.duration);
+      flow(ev);
+      if (ev.event === "ended" && P.t.type === "SHOW" && W.done && !(UN && UN.key === subKey() && UN.left <= 0)) { if (UN) clearInterval(UN.tick); banner(null); step(1); }
+      return;
+    }
+    if (d.event === "status" && +d.data >= 400) return fail("status");
+    if (d.type === "vidrift:progress" || d.type === "vidrift:unpaused") { if (+d.currentTime >= 0) flow({ event: "timeupdate", currentTime: +d.currentTime }); }
+    if (/^vidrift:(unpaused|playing|time|progress)/.test(d.type || "")) { if (!W.done) settle(true); return; }
+  });
+  // Smoothness: while the player says it's playing, its time should move ~1s per second. If it stops moving (no
+  // pause, no end) the stream is frozen: that's counted against the server, and after 15s Vesper offers to switch.
+  var FL = null, flT = null;
+  function flow(ev) {
+    if (!W || !P) return; var now = Date.now(), e = ev.event;
+    if (!FL || FL.k !== W.k || FL.f !== W.f) FL = { k: W.k, f: W.f, t: +ev.currentTime || 0, at: now, play: false, offered: 0 };
+    if (e === "pause" || e === "ended" || e === "seeking" || e === "waiting-seek") { FL.play = false; FL.at = now; return; }
+    if (e === "play" || e === "playing") { FL.play = true; FL.at = now; return; }
+    if (e === "timeupdate") { var t = +ev.currentTime || 0;
+      if (t > FL.t + 0.05 && t - FL.t < 20) { var h = hOf(W.k); h.watch += Math.min(t - FL.t, (now - FL.at) / 1000 + 1); if (now - FL.at > 4000) h.stall += (now - FL.at) / 1000 - (t - FL.t); hSave(); FL.play = true; }
+      FL.t = t; FL.at = now; if (FL.offered) { FL.offered = 0; banner(null); }
+      if (+ev.duration > 0) upNext(t, +ev.duration); }
+  }
+  // Up Next: the last 25 seconds of an episode show the next one, with a 10-second countdown
+  var UN = null;
+  function nextEp() { var flat = []; (P.ss || []).forEach(function (s) { s.eps.forEach(function (x) { flat.push(x); }); });
+    var i = flat.findIndex(function (x) { return x.s === P.s && x.e === P.e; }); return i >= 0 ? flat[i + 1] || null : null; }
+  function upNext(t, d) {
+    if (!P || P.t.type !== "SHOW" || d - t > 25 || d < 300) return;
+    var key = subKey(); if (UN && UN.key === key) return;
+    var nx = nextEp(); if (!nx) return;
+    UN = { key: key, left: 10 };
+    function draw() { banner('<span>Next: <b>S' + nx.s + " · E" + nx.e + "</b> " + esc(nx.title || "") + ' — in ' + UN.left + 's</span><button data-fsnow>Play now</button><button class="g" data-fsuncancel>Cancel</button>'); }
+    draw(); UN.tick = setInterval(function () { if (!UN || UN.key !== key || !P || subKey() !== key) return clearInterval(UN && UN.tick);
+      if (--UN.left <= 0) { clearInterval(UN.tick); banner(null); step(1); } else draw(); }, 1000);
+  }
+  setInterval(function () {   // frozen stream check
+    if (!FL || !W || !P || !FL.play || W.f !== FL.f) return;
+    var gap = Date.now() - FL.at;
+    if (gap > 15000 && !FL.offered) { FL.offered = 1; var h = hOf(W.k); h.stall += 15; hSave();
+      banner('<span>The stream seems stuck' + (FL.t > 30 ? " at <b>" + clock(FL.t) + "</b>" : "") + '. Another server?</span><button data-fsgo>Switch</button><button class="g" data-fsstay>Keep waiting</button>'); }
+  }, 3000);
+  // a tap inside the player (the page loses focus to the frame) = you're using it: no more switching
+  window.addEventListener("blur", function () { setTimeout(function () { if (W && !W.done && document.activeElement === W.f) settle(false); }, 0); });
+  // an ad that tries to send the whole page elsewhere gets a "Leave site?" question instead (laptop browsers)
+  function onLeave(e) { e.preventDefault(); e.returnValue = ""; return ""; }
+  function guard(on) { if (on) window.addEventListener("beforeunload", onLeave); else window.removeEventListener("beforeunload", onLeave); }
+  function play(t, ep) {
+    if (!can(t)) return;
+    build(); if (S.markViewed) try { S.markViewed(t.id); } catch (e) {}
+    P = { t: t, auto: 1, bad: {}, srv: order()[0].k, s: ep && ep.s || 1, e: ep && (ep.e || ep.n) || 1, tmdb: null, ss: null, explicit: !!ep, asia: asia(t), kk: null, kkS: null };
+    el.querySelector(".fst b").textContent = t.title + (t.year ? " (" + t.year + ")" : "");
+    el.classList.remove("dock", "quiet"); el.classList.add("on"); guard(true);
+    history.pushState({ fsp: 1, d: history.state && history.state.d }, "");
+    var my = P, kkDone = false, metaDone = false;
+    function ready() {   // pick the first server once we know what KissKH has (or after 2.5s)
+      if (P !== my || my.started) return; my.started = 1; P.srv = order().filter(function (x) { return x.kk || P.tmdb !== null || !metaDone; })[0].k; load(); }
+    msgSet("Finding this title…");
+    kkFind(t, P.s).then(function (k) { if (P !== my) return; kkDone = true;
+      if (k) { P.kk = k; P.kkS = P.s; if (k.cc && ASIA[k.cc]) P.asia = true;
+        if (t.type === "SHOW" && !P.ss) P.ss = [{ n: P.s, eps: k.e.map(function (x) { return { s: P.s, e: x[0], title: "Episode " + x[0] }; }) }]; }
+      if (!my.started) ready(); else { if (P.kk && !P.tmdb && metaDone) { P.srv = "kisskh"; load(); } else dock(); } });
+    setTimeout(ready, 2500);
+    meta(t).then(function (r) {
+      if (P !== my) return; metaDone = true;
+      P.imdb = r.imdb; P.tmdb = r.tmdb; if (!r.tmdb) { P.err = "None of the free servers know this title yet."; if (P.kk) P.srv = "kisskh"; }
+      if (t.type === "SHOW") { P.ss = episodes(r.m);
+        var last = EPL[r.imdb], cwx = CW[r.imdb];   // the newest of: last episode opened, last episode watched
+        if (!P.explicit) { if (cwx && cwx.s && (!last || cwx.at >= last.at)) { P.s = cwx.s; P.e = cwx.e; } else if (last) { P.s = last.s; P.e = last.e; } } }
+      var cw = CW[r.imdb]; if (cw && cw.c > 60 && !cw.fin && (t.type !== "SHOW" || (cw.s === P.s && cw.e === P.e))) P.resume = cw.c;
+      if (t.fs && !t.desc && r.m.description) t.desc = r.m.description;
+      P.foreign = foreignOf(t, r.m);
+      if (my.started) load(); else if (kkDone) ready();
+    }).catch(function () { if (P !== my) return; metaDone = true; P.err = "Couldn't find this title on the free servers."; if (P.kk) P.srv = "kisskh"; if (my.started) load(); else if (kkDone) ready(); });
+  }
+  function msgSet(s) { var m = el.querySelector(".fsmsg"); if (m) m.textContent = s; var o = el.querySelector(".fsv iframe"); if (o) o.remove(); el.querySelector(".fst small").textContent = ""; el.querySelector(".fsdock").innerHTML = ""; }
+  // ---------- subtitles over any server that reports its time (rezesubs.com by TMDB id, or your own .srt/.vtt) ----------
+  // Shown in Vesper's own layer over the player (works in full screen too). Off by default; the language you
+  // pick is remembered. Your own files are kept per title/episode.
+  var SUB = { lang: ld("sublang", "off"), off: 0, cues: null, list: null, key: "", src: "", busy: 0, ownName: "" }, subT = null;
+  var RZ = "https://rezesubs.com";
+  var ENC = { US: 1, GB: 1, CA: 1, AU: 1, IE: 1, NZ: 1 };
+  function foreignOf(t, m) {
+    var c = (t.countries || []).slice(); if (!c.length && m && m.country) c = String(m.country).split(/,\s*/).map(function (n) { for (var k in CCN) if (CCN[k] === n) return k; return n === "USA" ? "US" : n === "UK" ? "GB" : "?"; });
+    if (!c.length && P && P.kk && P.kk.cc) c = [P.kk.cc];
+    return c.length > 0 && !c.some(function (x) { return ENC[x]; });
+  }
+  function subKey() { return P ? (P.imdb || P.t.id) + (P.t.type === "SHOW" ? ":" + P.s + ":" + P.e : "") : ""; }
+  function parseSubs(txt) {
+    var out = [], blocks = String(txt || "").replace(/\r/g, "").split(/\n\s*\n/);
+    function ts(s) { var m = /(?:(\d+):)?(\d+):(\d+)[.,](\d+)/.exec(s); return m ? (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]) + (+(m[4] + "00").slice(0, 3)) / 1000 : null; }
+    blocks.forEach(function (b) { var lines = b.split("\n"), i = lines.findIndex(function (l) { return l.indexOf("-->") >= 0; }); if (i < 0) return;
+      var id = i > 0 ? lines[i - 1] : "", p = lines[i].split("-->"), a = ts(p[0]), z = ts(p[1]); if (a == null || z == null) return;
+      var text = lines.slice(i + 1).join("\n").replace(/<(?!\/?i>)[^>]+>/g, "").replace(/\{[^}]*\}/g, "").trim();
+      if (!text || /^ad[-_]/i.test(id) || /visit |www\.|https?:|\.(lol|com|net|org|xyz)\b|subtitles? by|opensubtitles|subscene/i.test(text)) return;
+      out.push({ a: a, b: z, t: text }); });
+    return out.sort(function (x, y) { return x.a - y.a; });
+  }
+  function subList(cb) {   // what rezesubs has for this title / episode
+    if (!P || !P.tmdb) return cb(null);
+    var u = RZ + "/data/subs/" + (P.t.type === "SHOW" ? "tv/" + P.tmdb + "/" + P.s + "/" + P.e : "movie/" + P.tmdb), k = subKey();
+    get(u, 10000).then(function (j) { if (subKey() !== k) return; cb((j && j.subtitles) || []); }).catch(function () { cb([]); });
+  }
+  function subLangs(list) { var seen = {}, out = []; (list || []).forEach(function (s) { if (!seen[s.lang]) { seen[s.lang] = 1; out.push(s.lang); } });
+    out.sort(function (a, b) { return (b === "english") - (a === "english") || (b === "korean") - (a === "korean") || a.localeCompare(b); }); return out; }
+  function subFor() {   // a new title/episode/server: load the remembered choice
+    if (!P) return; var k = subKey(); if (SUB.key === k && SUB.cues) { subTick(); return; }
+    SUB.key = k; SUB.cues = null; SUB.list = null; SUB.src = ""; SUB.lang = ld("sublang", "off");   // an automatic English never carries over SUB.off = +ld("suboff:" + (P.imdb || P.t.id), 0) || 0;
+    var own = ld("subown:" + k, null);
+    if (own && own.c) { SUB.cues = own.c; SUB.src = "own"; SUB.ownName = own.n || "your file"; subStart(); dock(); return; }
+    subList(function (list) { SUB.list = list;
+      var auto = SUB.lang === "off" && P && P.foreign && !ld("subno:" + (P.imdb || P.t.id), 0) && (list || []).some(function (s) { return s.lang === "english"; });
+      if (SUB.lang !== "off") subUse(SUB.lang); else if (auto) subUse("english", 0, true); else dock(); });
+  }
+  function subUse(lang, nth, auto) {
+    SUB.lang = lang; if (!auto) sv("sublang", lang);
+    if (lang === "off" && P && !auto) sv("subno:" + (P.imdb || P.t.id), 1);
+    if (lang === "off") { SUB.cues = null; SUB.src = ""; subDraw(""); dock(); return; }
+    var pick = (SUB.list || []).filter(function (s) { return s.lang === lang; })[nth || 0];
+    if (!pick) { SUB.cues = null; SUB.src = "none"; subDraw(""); dock(); return; }
+    var k = subKey(); SUB.busy = 1; dock();
+    fetch(RZ + pick.url).then(function (r) { return r.text(); }).then(function (txt) { if (subKey() !== k) return; SUB.busy = 0; SUB.cues = parseSubs(txt); SUB.src = lang + (nth ? " " + (nth + 1) : ""); SUB.nth = nth || 0; subStart(); dock(); })
+      .catch(function () { SUB.busy = 0; SUB.src = "none"; dock(); });
+  }
+  function subStart() { clearInterval(subT); subT = setInterval(subTick, 200); subTick(); }
+  function subNow() { if (!FL || !W || FL.f !== W.f) return null; return FL.t + (FL.play ? Math.min(2, (Date.now() - FL.at) / 1000) : 0); }
+  function subTick() {
+    if (!P || !SUB.cues || !SUB.cues.length) return subDraw("");
+    var t = subNow(); if (t == null) return subDraw(""); t -= SUB.off;
+    var c = SUB.cues, lo = 0, hi = c.length - 1, hit = null;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (c[mid].b < t) lo = mid + 1; else if (c[mid].a > t) hi = mid - 1; else { hit = c[mid]; break; } }
+    subDraw(hit ? hit.t : "");
+  }
+  function subDraw(text) {
+    var box = el && el.querySelector(".fsv"); if (!box) return; var s = box.querySelector(".fssub");
+    if (!text) { if (s) s.style.opacity = 0; return; }
+    if (!s) { s = document.createElement("div"); s.className = "fssub"; box.appendChild(s); }
+    if (s._t !== text) { s._t = text; s.innerHTML = esc(text).replace(/&lt;(\/?)i&gt;/g, "<$1i>").replace(/\n/g, "<br>"); }
+    s.style.opacity = 1;
+  }
+  function subDock() {
+    if (!P) return ""; var talks = !(SERVERS.filter(function (x) { return x.k === P.srv; })[0] || {}).quiet && P.srv !== "kisskh";
+    var langs = subLangs(SUB.list), cur = SUB.lang, nEn = (SUB.list || []).filter(function (s) { return s.lang === cur; }).length;
+    var h = '<div class="fsh">Subtitles</div><div class="fssubs"><select data-fssl><option value="off"' + (cur === "off" && SUB.src !== "own" ? " selected" : "") + ">Off</option>" +
+      langs.map(function (l) { return '<option value="' + esc(l) + '"' + (cur === l && SUB.src !== "own" ? " selected" : "") + ">" + esc(l.charAt(0).toUpperCase() + l.slice(1)) + "</option>"; }).join("") +
+      (SUB.src === "own" ? '<option value="own" selected>' + esc(SUB.ownName) + "</option>" : "") + "</select>" +
+      (nEn > 1 && SUB.src !== "own" && cur !== "off" ? '<button data-fssn>Version ' + ((SUB.nth || 0) + 1) + "/" + nEn + "</button>" : "") +
+      '<label class="fsfile">Add file<input type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" data-fsfile hidden></label></div>' +
+      (SUB.cues ? '<div class="fssync"><button data-fsoff="-0.5">− 0.5s</button><span>' + (SUB.off ? (SUB.off > 0 ? "+" : "") + SUB.off.toFixed(1) + "s" : "In sync") + '</span><button data-fsoff="0.5">+ 0.5s</button></div>' : "") +
+      '<p class="fsnote" style="margin:4px 2px 14px">' + (SUB.busy ? "Loading subtitles…" : SUB.src === "none" ? "No " + esc(cur) + " subtitles found for this one." : !talks ? "This server doesn’t share its time, so Vesper’s subtitles can’t follow it — use its own CC, or pick VidQueen, VidGold, Cinezo, VidRock or VidFast." :
+        SUB.cues ? SUB.cues.length + " lines · shown over the picture, in full screen too. If they run early or late, nudge them." : (SUB.list && SUB.list.length ? subLangs(SUB.list).length + " languages available." : P.tmdb ? "Looking for subtitles…" : "")) + "</p>";
+    return h;
+  }
+  function subFile(file) {
+    if (!file) return; var k = subKey(), rd = new FileReader();
+    rd.onload = function () { var c = parseSubs(rd.result); if (!c.length) { SUB.src = "none"; dock(); return; }
+      SUB.cues = c; SUB.src = "own"; SUB.ownName = file.name.slice(0, 40);
+      try { sv("subown:" + k, { n: SUB.ownName, c: c }); var idx = ld("subownidx", []).filter(function (x) { return x !== k; }); idx.push(k); while (idx.length > 12) { try { LS.removeItem("vesper.fs.subown:" + idx.shift()); } catch (e) {} } sv("subownidx", idx); } catch (e) {}
+      subStart(); dock(); };
+    rd.readAsText(file);
+  }
+  document.addEventListener("keydown", function (e) {
+    if (!el || !el.classList.contains("on") || e.metaKey || e.ctrlKey || e.altKey || /input|select|textarea/i.test((e.target.tagName || ""))) return;
+    var k = e.key.toLowerCase(), hit = true;
+    if (k === "escape") { if (el.classList.contains("max")) maxi(false); else close(); }
+    else if (k === "f") maxi(!el.classList.contains("max"));
+    else if (k === "n" && P.t.type === "SHOW") step(1);
+    else if (k === "p" && P.t.type === "SHOW") step(-1);
+    else if (k === "s") { if (SUB.cues) { SUB.prev = SUB.lang; subUse("off"); } else subUse(SUB.prev && SUB.prev !== "off" ? SUB.prev : "english"); }
+    else if (k === "[" || k === "]") { if (!SUB.cues) return; SUB.off = Math.round((SUB.off + (k === "]" ? 0.5 : -0.5)) * 10) / 10; sv("suboff:" + (P.imdb || P.t.id), SUB.off); subTick(); dock(); }
+    else hit = false;
+    if (hit) e.preventDefault();
+  });
+  function close(fromPop) {
+    if (!el || !el.classList.contains("on")) return false;
+    el.classList.remove("on", "dock", "max", "rot"); pin(false); guard(false); clearInterval(subT); subDraw(""); SUB.key = ""; clearTimeout(autoT); clearInterval(tickT); W = null; var f = el.querySelector("iframe"); if (f) f.remove(); P = null;
+    if (!fromPop && history.state && history.state.fsp) history.back();
+    return true;
+  }
+
+  // ---------- title page / hover button ----------
+  function btn(t, big) {
+    if (!can(t)) return "";
+    var ic = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    if (big) { var x = t.imdb_id && CW[t.imdb_id], res = x && x.d ? (x.type === "series" ? "S" + x.s + " · E" + x.e : clock(x.c)) : "";
+      return '<button class="btn play big free" data-free="' + esc(t.id) + '">' + ic + (res ? "Resume" : "Play") + '<span class="fstag">' + (res ? esc(res) + " · " : "") + "FREE</span></button>"; }
+    return '<button class="btn wide free" data-free="' + esc(t.id) + '">' + ic + "Watch free</button>";
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-free]"); if (!b) return;
+    e.stopPropagation(); e.preventDefault(); play(S.T[b.dataset.free]);
+  }, true);
+
+  // ---------- missing posters: TVmaze (series) → Wikipedia's poster (via Wikidata) → the backdrop → hide the card ----------
+  var PX = ld("px", {}), pxQ = [], pxT = null, pxWait = {};
+  function pxSave() { var ks = Object.keys(PX); if (ks.length > 1500) ks.slice(0, ks.length - 1500).forEach(function (k) { delete PX[k]; }); sv("px", PX); }
+  function altPoster(t) {
+    var id = t.imdb_id; if (!id) return Promise.resolve("");
+    if (PX[id] != null) return Promise.resolve(PX[id]);
+    var tv = t.type === "SHOW" ? get("https://api.tvmaze.com/lookup/shows?imdb=" + id, 8000).then(function (s) { return s && s.image ? s.image.medium || s.image.original : ""; }).catch(function () { return ""; }) : Promise.resolve("");
+    return tv.then(function (u) { if (u) { PX[id] = u; pxSave(); return u; }
+      return new Promise(function (ok) { (pxWait[id] = pxWait[id] || []).push(ok); if (pxQ.indexOf(id) < 0) pxQ.push(id); clearTimeout(pxT); pxT = setTimeout(pxRun, 350); }); });
+  }
+  function pxRun() {   // up to 40 titles in one Wikidata + one Wikipedia request
+    var ids = pxQ.splice(0, 40); if (!ids.length) return; if (pxQ.length) pxT = setTimeout(pxRun, 400);
+    function done(map) { ids.forEach(function (id) { PX[id] = map[id] || ""; (pxWait[id] || []).forEach(function (f) { f(PX[id]); }); delete pxWait[id]; }); pxSave(); }
+    var q = 'SELECT ?id ?a WHERE { VALUES ?id {' + ids.map(function (x) { return '"' + x + '"'; }).join(" ") + '} ?i wdt:P345 ?id . ?a schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> }';
+    get("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), 12000).then(function (j) {
+      var byTitle = {}; (j.results.bindings || []).forEach(function (b) { byTitle[decodeURIComponent(b.a.value.split("/wiki/")[1]).replace(/_/g, " ")] = b.id.value; });
+      var titles = Object.keys(byTitle); if (!titles.length) return done({});
+      return get("https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=thumbnail&pithumbsize=400&pilicense=any&redirects=1&format=json&origin=*&titles=" + encodeURIComponent(titles.join("|")), 12000).then(function (w) {
+        var map = {}, red = {}; ((w.query && w.query.normalized) || []).concat((w.query && w.query.redirects) || []).forEach(function (r) { red[r.to] = r.from; });
+        Object.keys((w.query && w.query.pages) || {}).forEach(function (k) { var p = w.query.pages[k], ti = p.title; while (!byTitle[ti] && red[ti]) ti = red[ti];
+          if (p.thumbnail && byTitle[ti]) map[byTitle[ti]] = p.thumbnail.source; });
+        done(map);
+      });
+    }).catch(function () { done({}); });
+  }
+  document.addEventListener("error", function (e) {
+    var im = e.target; if (!im || im.tagName !== "IMG" || !im.classList.contains("p")) return;
+    var c = im.closest(".pc"), t = c && S.T[c.dataset.id]; if (!t || !t.fs || (t.avail || []).length || t.site) return;
+    e.stopPropagation();   // ours to handle (the page's own handler would just drop the picture)
+    if (!im.dataset.alt) { im.dataset.alt = 1;
+      altPoster(t).then(function (u) { if (u) { t.poster = u; im.src = u; } else if (t.backdrop && !/metahub/.test(t.backdrop)) im.src = t.backdrop; else c.style.display = "none"; });
+      return; }
+    c.style.display = "none";
+  }, true);
+  // ---------- Search: "Free servers" switch + "On free servers" row ----------
+  var tok = 0, SQ = {};
+  function search(q, cb) {
+    var qn = norm(q); if (SQ[qn]) return cb(SQ[qn]);
+    Promise.all(["movie", "series"].map(function (ty) { return get(CM + "/catalog/" + ty + "/top/search=" + encodeURIComponent(q) + ".json").then(function (j) { return j.metas || []; }).catch(function () { return []; }); }))
+      .then(function (r) {
+        var all = r[0].map(function (m, i) { m.type = "movie"; m._r = i; return m; }).concat(r[1].map(function (m, i) { m.type = "series"; m._r = i; return m; }));
+        // Cinemeta's own order is by popularity — keep it, nudge by how well the name matches, and lift what's on your apps
+        function score(m, i) { var k = norm(m.name), cat = index()[m.id];
+          return (k === qn ? 12 : k.indexOf(qn) === 0 ? 9 : (" " + k).indexOf(" " + qn) >= 0 ? 5 : 0) + (cat && (cat.avail || []).length ? 25 : 0) - i * 4; }
+        var withI = all.map(function (m) { var i = m.type === "movie" ? r[0].indexOf(m) : r[1].indexOf(m); return { m: m, s: score(m, i) }; });
+        withI.sort(function (a, b) { return b.s - a.s; });
+        SQ[qn] = withI.map(function (x) { return x.m; }); cb(SQ[qn]);
+      });
+  }
+  // ---------- the free pool: Cinemeta's lists carry country, genres, year, plot, rating, runtime — so the free row can
+  // answer "korean romance 2024", "new thrillers", "college", "cozy feel good" the same way your apps' results do ----------
+  var GN = { act: "Action", ani: "Animation", cmy: "Comedy", crm: "Crime", doc: "Documentary", drm: "Drama", fml: "Family", fnt: "Fantasy", hst: "History", hrr: "Horror", msc: "Music",
+    rma: "Romance", scf: "Sci-Fi", spt: "Sport", trl: "Thriller", war: "War", wsn: "Western", rly: "Reality-TV" };
+  var CCN = { KR: "South Korea", JP: "Japan", CN: "China", HK: "Hong Kong", TW: "Taiwan", TH: "Thailand", IN: "India", US: "United States", GB: "United Kingdom", ES: "Spain", FR: "France",
+    DE: "Germany", IT: "Italy", TR: "Turkey", MX: "Mexico", AU: "Australia", CA: "Canada", IE: "Ireland", DK: "Denmark", SE: "Sweden", NO: "Norway", FI: "Finland", IS: "Iceland", BE: "Belgium",
+    NL: "Netherlands", PL: "Poland", PK: "Pakistan", PH: "Philippines", BR: "Brazil" };
+  var POOL = {}, POOLC = ld("pool", {});
+  function poolPage(ty, cat, filt, skip) {   // one Cinemeta list page, slimmed and remembered for a day
+    var key = ty + "/" + cat + "/" + (filt || "") + "/" + (skip || 0);
+    var c = POOLC[key]; if (c && Date.now() - c.at < 864e5) return Promise.resolve(c.m);
+    if (POOL[key]) return POOL[key];
+    var u = CM + "/catalog/" + ty + "/" + cat + (filt || skip ? "/" + [filt, skip ? "skip=" + skip : ""].filter(Boolean).join("&") : "") + ".json";
+    return (POOL[key] = get(u, 15000).then(function (j) {
+      var m = (j.metas || []).map(function (x) { return { id: x.id, name: x.name, type: ty, releaseInfo: x.releaseInfo, year: +(String(x.year || x.releaseInfo || "").slice(0, 4)) || 0,
+        country: x.country || "", genres: x.genres || x.genre || [], description: (x.description || "").slice(0, 260), imdbRating: x.imdbRating, runtime: parseInt(x.runtime, 10) || 0 }; });
+      POOLC[key] = { at: Date.now(), m: m }; var ks = Object.keys(POOLC).sort(function (p, q2) { return POOLC[p].at - POOLC[q2].at; }); ks.slice(0, Math.max(0, ks.length - 40)).forEach(function (k) { delete POOLC[k]; });
+      sv("pool", POOLC); return m; }).catch(function () { delete POOL[key]; return []; }));
+  }
+  function fFit(m, moods) {   // the mood score for a Cinemeta item (same idea as the apps' moodFit)
+    var gs = m.genres || [], s = 0, h = (m.name || "") + " " + (m.description || "");
+    function has(code) { return gs.indexOf(GN[code]) >= 0; }
+    for (var i = 0; i < moods.length; i++) { var M = moods[i];
+      if (M.g) for (var g in M.g) if (has(g)) s += M.g[g];
+      if (M.x) for (var x in M.x) if (has(x)) { if (M.x[x] === 1) return -99; s -= 4; }
+      if (M.kw && M.kw.test(h)) s += 3; if (M.nkw && M.nkw.test(h)) s -= 7;
+      if (M.maxRun && m.type === "movie" && m.runtime && m.runtime > M.maxRun) s -= 5;
+      if (M.type && (M.type === "SHOW") !== (m.type === "series")) s -= 4;
+      if (M.rate) s += ((+m.imdbRating || 6) - 6.5); }
+    return s;
+  }
+  function freeFind(q, opt, cb) {
+    var P = opt.P || { genres: [], rest: [] }, moods = opt.moods || [], topics = (opt.topics || []).map(function (s) { try { return new RegExp(s, "i"); } catch (e) { return null; } }).filter(Boolean);
+    var Y = new Date().getFullYear(), types = P.type === "MOVIE" ? ["movie"] : P.type === "SHOW" ? ["series"] : ["movie", "series"];
+    var structured = !!(P.structured || moods.length), jobs = [];
+    // which lists to read
+    types.forEach(function (ty) {
+      var pages = ty === "movie" ? [0, 50] : [0];   // series pages are heavy (they carry every episode)
+      var gname = (P.genres || []).map(function (g) { return GN[g]; }).filter(Boolean)[0];
+      if (!gname && moods.length) { var best = null, bw = 0; moods.forEach(function (M) { for (var g in (M.g || {})) if (M.g[g] > bw && GN[g]) { bw = M.g[g]; best = GN[g]; } }); gname = best; }
+      if (P.year) jobs.push(poolPage(ty, "year", "genre=" + P.year)), ty === "movie" && jobs.push(poolPage(ty, "year", "genre=" + P.year, 50));
+      else if (P.newish) { jobs.push(poolPage(ty, "year", "genre=" + Y)); jobs.push(poolPage(ty, "year", "genre=" + (Y - 1))); }
+      else if (P.era) [P.era[0], P.era[0] + 4, P.era[1]].forEach(function (yy) { jobs.push(poolPage(ty, "year", "genre=" + yy)); });
+      if (gname) pages.forEach(function (sk) { jobs.push(poolPage(ty, "top", "genre=" + gname, sk)); });
+      if (!gname && !P.year && !P.newish && !P.era) pages.concat(topics.length && ty === "movie" ? [100] : []).forEach(function (sk) { jobs.push(poolPage(ty, "top", "", sk)); });
+    });
+    // plain words (titles) and the topic's look-alike words ("college" → university, campus…)
+    // always search the words exactly as typed too: "family matters" is a title, not just the Family genre
+    var words = (P.rest || []).join(" "), TITLEQ = {};
+    jobs.push(new Promise(function (ok) { search(q, function (l) { (l || []).forEach(function (m) { if (!TITLEQ[m.id]) TITLEQ[m.id] = (m._r || 0) + 1; }); ok(l); }); }));
+    if (structured && words && norm(words) !== norm(q)) jobs.push(new Promise(function (ok) { search(words, ok); }));
+    topics.slice(0, 1).forEach(function (re) { re.source.replace(/^\\b\(\?:/, "").replace(/\)$/, "").split("|").slice(0, 4).forEach(function (w) { w = w.replace(/\\/g, ""); if (w.length >= 4 && w !== words) jobs.push(new Promise(function (ok) { search(w, ok); })); }); });
+    var ccNames = (P.cc || []).map(function (c) { return CCN[c]; }).filter(Boolean);
+    var kkJob = (P.cc || []).some(function (c) { return ASIA[c]; }) ? kkIndex() : Promise.resolve([]);   // KissKH can't judge moods, but its newest fit "feel good korean drama" well enough after the scored ones
+    Promise.all([Promise.all(jobs), kkJob]).then(function (r) {
+      var seen = {}, all = [];
+      [].concat.apply([], r[0]).forEach(function (m) { if (m && m.id && !seen[m.id]) { seen[m.id] = 1; if (!m.type) m.type = "movie"; all.push(m); } });
+      var ok = all.filter(function (m) {
+        if (P.type && (P.type === "SHOW") !== (m.type === "series")) return false;
+        var yy = m.year || +(String(m.releaseInfo || "").slice(0, 4)) || 0;
+        if (P.year && yy && Math.abs(yy - P.year) > 0) return false;
+        if (P.era && yy && !(yy >= P.era[0] && yy <= P.era[1])) return false;
+        if (P.newish && yy && yy < Y - 1) return false;
+        if (ccNames.length && m.country !== undefined && !ccNames.some(function (n) { return String(m.country || "").indexOf(n) >= 0; })) return m.country === "" ? false : false;
+        if ((P.genres || []).length && m.genres && m.genres.length && !P.genres.every(function (g) { return m.genres.indexOf(GN[g]) >= 0; })) return false;
+        if ((P.notG || []).length && (m.genres || []).some(function (g) { return P.notG.some(function (c) { return GN[c] === g; }); })) return false;
+        if (topics.length && m.description !== undefined && !topics.every(function (re) { return re.test((m.name || "") + " " + (m.description || "")); })) return false;
+        return true; });
+      // search results (no plot/country attached) only count for plain title searches
+      if (structured) ok = ok.filter(function (m) { return m.description !== undefined || !ccNames.length; });
+      var scored = ok.map(function (m) { var f = moods.length ? fFit(m, moods) : 0;
+        return { m: m, f: f, s: f * 2 + (+m.imdbRating || 6) * 0.8 + (P.newish ? (m.year || 0) - Y : 0) * 2 }; })
+        .filter(function (x) { return !moods.length || x.f >= 3; });
+      if (structured || topics.length) scored.sort(function (a, b) { return b.s - a.s; });
+      if (opt.exact) { var qx = norm(q).split(" ").filter(Boolean); scored = scored.filter(function (x) { var k = " " + norm(x.m.name) + " "; return qx.every(function (w) { return k.indexOf(" " + w) >= 0; }); }); }
+      var qw = norm(q).split(" ").filter(function (w) { return w.length > 1; }), titleHits = [];
+      // Cinemeta's own order for each type (it knows "Family Plan" is the Korean "Family Matters"), films and series side by side
+      all.forEach(function (m) { if (!TITLEQ[m.id]) return; var k = " " + norm(m.name) + " ", fullHit = qw.every(function (w) { return k.indexOf(" " + w) >= 0; });
+        if (fullHit || (!opt.exact && TITLEQ[m.id] <= 6)) titleHits.push(m); });
+      titleHits.sort(function (a, b) { return TITLEQ[a.id] - TITLEQ[b.id] || (a.type === "series" ? -1 : 1); });
+      var hitIds = {}; titleHits.forEach(function (m) { hitIds[m.id] = 1; });
+      var items = titleHits.filter(function (m) { return !P.type || (P.type === "SHOW") === (m.type === "series"); }).map(T).filter(Boolean)
+        .concat(scored.filter(function (x) { return !hitIds[x.m.id]; }).map(function (x) { return T(x.m); }).filter(Boolean));
+      // KissKH for Korean / Japanese / Chinese / Thai searches: newest first, by type and year
+      var kk = (r[1] || []).filter(function (k) { return P.cc.indexOf(k.cc) >= 0 && (!P.type || (P.type === "SHOW") === (k.ty === "S" || k.ty === "A")) &&
+        (!P.year || k.y === P.year) && (!P.era || (k.y >= P.era[0] && k.y <= P.era[1])) && (!P.newish || !k.y || k.y >= Y - 1); }).slice(0, 24);
+      if (moods.length) kk = kk.slice(0, 14);
+      if (!kk.length) return cb(items);
+      Promise.race([Promise.all(kk.map(function (k) { return kkShard(k.id); })), new Promise(function (okk) { setTimeout(function () { okk([]); }, 3000); })]).then(function (ths) {
+        var kt = kk.map(function (k, i) { return kkT(k, ths[i] && ths[i].th); }), have = {}; items.forEach(function (t) { have[norm(t.title)] = 1; });
+        var kf = kt.filter(function (t) { return !have[norm(t.title)]; }); cb(moods.length || (P.genres || []).length ? items.concat(kf.slice(0, 10)) : kf.concat(items)); });   // KissKH has no genres: after the genre matches
+    });
+  }
+  function searchInto(body, q, R, rowEl, opt) {
+    if (!ON || !q || q.length < 2) return;
+    opt = opt || {}; var my = ++tok, TY = opt.type || null, title = "On free servers" + (opt.label ? " · " + opt.label.charAt(0).toLowerCase() + opt.label.slice(1) : "");
+    var box = document.createElement("div"); box.className = "sbres fsres"; box.innerHTML = '<div class="row-h">' + esc(title) + '<small>looking…</small></div><div class="sbph"></div>';
+    body.insertBefore(box, body.querySelector(".ownend") || body.firstChild);
+    setTimeout(function () {
+      if (my !== tok) return;
+      freeFind(q, opt, function (items) {
+        if (my !== tok || !box.isConnected) return;
+        items = items.filter(function (t) { return t && (!TY || t.type === TY); }).filter(function (t, i, a) { return a.indexOf(t) === i; }).slice(0, 40);
+        // plain title searches also add KissKH-only titles
+        var plain = !(opt.P && opt.P.structured) && !(opt.moods || []).length;
+        (plain ? kkSearch(q, TY) : Promise.resolve([])).then(function (kk) {
+          if (my !== tok || !box.isConnected) return;
+          var have = {}; items.forEach(function (t) { have[norm(t.title) + "|" + t.type] = 1; });
+          items = items.concat(kk.filter(function (t) { return items.indexOf(t) < 0 && !have[norm(t.title) + "|" + t.type]; })).slice(0, 40);
+          if (!items.length) { box.querySelector("small").textContent = "nothing for “" + q + "”"; var ph = box.querySelector(".sbph"); if (ph) ph.remove(); return; }
+          var row = rowEl(S.R(title, items, null, items.length + " · tap Watch free", 1, true)); row.classList.add("sbres", "fsres");
+          box.replaceWith(row); if (row._fill) row._fill(); });
+      });
+    }, 280);
+  }
+  function toggle(onChange) {
+    var b = document.createElement("button");
+    function paint() { b.className = "sbtog fstog" + (ON ? " on" : ""); b.innerHTML = "<i></i>Free servers " + (ON ? "on" : "off"); }
+    paint(); b.addEventListener("click", function () { ON = !ON; sv("on", ON); paint(); if (onChange) onChange(); });
+    return b;
+  }
+
+  // ---------- free rows: trending + new + genre picks from Cinemeta, a different mix every visit, spread through the page ----------
+  var Y = new Date().getFullYear(), LAUNCH = (+ld("launch", 0) || 0) + 1; sv("launch", LAUNCH);
+  var MG = ["Action", "Comedy", "Thriller", "Horror", "Romance", "Sci-Fi", "Animation", "Drama", "Crime", "Mystery", "Fantasy", "Adventure", "Family", "Documentary"];
+  var SG = ["Drama", "Comedy", "Crime", "Sci-Fi", "Animation", "Thriller", "Fantasy", "Mystery", "Reality-TV", "Documentary", "Action"];
+  var GW = { "Sci-Fi": "sci-fi", "Reality-TV": "reality", Documentary: "documentary", Animation: "animated" };
+  function gw(g) { return GW[g] || g.toLowerCase(); }
+  function seeded(seed) { var s = seed % 2147483647; if (s <= 0) s += 2147483646; return function () { s = s * 16807 % 2147483647; return (s - 1) / 2147483646; }; }
+  function hash(str) { var h = 7; for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); }
+  function shuffle(a, rnd) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
+  function core(id) {
+    if (id === "home") return [{ t: "Trending now", k: ["movie/top", "series/top"] }, { t: "New this year", k: ["movie/year/genre=" + Y, "series/year/genre=" + Y], fresh: 1 }];
+    if (id === "movies") return [{ t: "Trending films", k: ["movie/top"] }, { t: "New films of " + Y, k: ["movie/year/genre=" + Y], fresh: 1 }];
+    if (id === "shows") return [{ t: "Trending series", k: ["series/top"] }, { t: "New series of " + Y, k: ["series/year/genre=" + Y], fresh: 1 }];
+    if (id === "anime") return [{ t: "Trending anime & animation", k: ["series/top/genre=Animation", "movie/top/genre=Animation"] }];
+    return [];
+  }
+  function extra(id) {
+    var r = [], mv = id === "home" || id === "movies", se = id === "home" || id === "shows";
+    if (mv) { r.push({ t: "Fresh from " + (Y - 1), k: ["movie/year/genre=" + (Y - 1)] }, { t: "All-time great films", k: ["movie/imdbRating"] });
+      MG.forEach(function (g) { r.push({ t: "Trending " + gw(g) + " films", k: ["movie/top/genre=" + g] }); }); }
+    if (se) { r.push({ t: "Series from " + (Y - 1), k: ["series/year/genre=" + (Y - 1)] }, { t: "All-time great series", k: ["series/imdbRating"] });
+      SG.forEach(function (g) { r.push({ t: "Trending " + gw(g) + " series", k: ["series/top/genre=" + g] }); }); }
+    return r;
+  }
+  var NX = { home: 4, movies: 3, shows: 3, anime: 0 };
+  function picks(id, launch) { return core(id).concat(shuffle(extra(id), seeded(launch * 977 + hash(id))).slice(0, NX[id] || 0)); }
+  var LISTS = { home: 1, movies: 1, shows: 1, anime: 1 };
+  var busy = {};
+  function list(key) {
+    var c = CAT[key];
+    if ((!c || Date.now() - c.at > 12 * 3600000) && !busy[key]) { busy[key] = 1;
+      get(CM + "/catalog/" + key + ".json", 12000).then(function (j) {
+        CAT[key] = { at: Date.now(), m: (j.metas || []).slice(0, 40).map(function (m) { return { id: m.id, name: m.name, type: m.type, releaseInfo: m.releaseInfo, imdbRating: m.imdbRating, description: (m.description || "").slice(0, 300), background: m.background }; }) };
+        var ks = Object.keys(CAT).filter(function (k) { return !/^air/.test(k); }).sort(function (x, y) { return CAT[x].at - CAT[y].at; }); ks.slice(0, Math.max(0, ks.length - 30)).forEach(function (k) { delete CAT[k]; });
+        sv("cat", CAT); busy[key] = 0;
+      }).catch(function () { busy[key] = 0; }); }
+    return c ? c.m : [];
+  }
+  // blend the row's lists, lean to newer titles on "fresh" rows, then shake the order a little so every visit looks different
+  function buildRow(rc, seen, hid, rnd) {
+    var ls = rc.k.map(list), out = [], n = Math.max.apply(null, ls.map(function (l) { return l.length; }).concat([0]));
+    for (var i = 0; i < n; i++) ls.forEach(function (l) { if (l[i]) out.push(l[i]); });
+    var items = out.map(function (m, i) { var y = yr(m); return { m: m, s: i - (rc.fresh ? 0 : (y >= Y - 1 ? 6 : y >= Y - 3 ? 3 : 0)) + rnd() * 7 }; })
+      .sort(function (x, y) { return x.s - y.s; }).map(function (x) { return T(x.m); })
+      .filter(function (t) { if (!t || hid[t.id] || seen[t.id]) return false; seen[t.id] = 1; return true; });
+    return items;
+  }
+  // Airing today (series): TVmaze's schedule — streaming + US/UK/Korea/India TV — matched to IMDb ids so they play free
+  // Airing today (series): TVmaze's schedule — streaming + US/UK/Korea/India TV — matched to IMDb ids so they play free
+  function airing() {
+    var key = "air" + new Date().toISOString().slice(0, 10), c = CAT[key];
+    if (!c && !busy[key]) { busy[key] = 1; var day = new Date().toISOString().slice(0, 10);
+      Promise.all(["https://api.tvmaze.com/schedule/web?date=" + day].concat(["US", "GB", "KR", "IN"].map(function (cc) { return "https://api.tvmaze.com/schedule?country=" + cc + "&date=" + day; }))
+        .map(function (u) { return get(u, 12000).catch(function () { return []; }); })).then(function (ls) {
+        var seen = {}, out = [];
+        [].concat.apply([], ls).forEach(function (ep) { var sh = ep.show || (ep._embedded && ep._embedded.show); if (!sh || !sh.externals || !sh.externals.imdb || seen[sh.id]) return;
+          if (/News|Talk Show|Sports|Game Show/.test(sh.type || "")) return; seen[sh.id] = 1;
+          out.push({ id: sh.externals.imdb, name: sh.name, type: "series", releaseInfo: (sh.premiered || "").slice(0, 4), poster: sh.image ? sh.image.original || sh.image.medium : null, w: sh.weight || 0, description: (sh.summary || "").replace(/<[^>]+>/g, "").slice(0, 400) }); });
+        out.sort(function (a, b) { return b.w - a.w; });
+        Object.keys(CAT).forEach(function (k) { if (/^air/.test(k)) delete CAT[k]; });
+        CAT[key] = { at: Date.now(), m: out.slice(0, 40) }; sv("cat", CAT); busy[key] = 0;
+      }); }
+    return c ? c.m.map(T).filter(Boolean) : [];
+  }
+  function mix(id, rows) {
+    if (!rows || rows.length < 2) return rows;
+    if (id === "home" || id === "shows" || id === "movies") {   // Continue watching goes on top even when the switch is off
+      var cw = cwList().filter(function (t) { return id === "home" || (id === "shows") === (t.type === "SHOW"); });
+      if (cw.length) rows.splice(id === "home" ? 1 : 0, 0, S.R("Continue watching", cw, "cw", null, 1, true));
+    }
+    if (id === "home") { var fe = fest(); if (fe) rows.splice(Math.min(3, rows.length), 0, S.R(fe.title, fe.items, "fest", null, 1, true)); }
+    if (!ON || !LISTS[id]) return rows;
+    var hid = S.hiddenSet ? S.hiddenSet() : {}, seen = {}, rnd = seeded(LAUNCH * 131 + hash(id)), add = [];
+    if (id === "shows" || id === "home") { var air = airing().filter(function (t) { return !hid[t.id]; }); if (air.length >= 6) add.push(S.R("Airing today", shuffle(air.slice(0, 12), rnd).concat(air.slice(12)), null, "new episodes · watch free", 1, true)); }
+    picks(id, LAUNCH).forEach(function (rc) { var items = buildRow(rc, seen, hid, rnd); if (items.length >= 6) add.push(S.R(rc.t, items.slice(0, 30), null, "free servers", 1, true)); });
+    // core rows first, the rest shuffled; spread out: one free row every few of yours
+    var first = add.slice(0, id === "anime" ? 1 : 2), rest = shuffle(add.slice(first.length), rnd), order0 = first.concat(rest);
+    var at = id === "home" ? 3 : 2, gap = id === "home" ? 3 : 3;
+    order0.forEach(function (r, i) { rows.splice(Math.min(at + i * (gap + 1), rows.length), 0, r); });
+    return rows;
+  }
+  function wrap() { Object.keys(LISTS).forEach(function (k) { var f = S.SECTIONS && S.SECTIONS[k]; if (typeof f !== "function" || f._fs) return;
+    var g = function () { var r = f.apply(this, arguments); try { return mix(k, r); } catch (e) { return r; } }; g._fs = 1; Object.keys(f).forEach(function (p) { g[p] = f[p]; }); S.SECTIONS[k] = g; }); }
+  wrap();
+  // fetch this visit's lists (and the next visit's, so they're ready) in the background
+  setTimeout(function () { if (!ON) return; Object.keys(LISTS).forEach(function (k) { [LAUNCH, LAUNCH + 1].forEach(function (L) { picks(k, L).forEach(function (rc) { rc.k.forEach(list); }); }); }); airing(); }, 2500);
+
+  // "Free" badge on cards of titles only the free servers have
+  if (window.VSB) { var lab = VSB.label; VSB.label = function (t) { if (!t || (t.avail || []).length) return ""; return t.site ? lab(t) : t.fs ? '<span class="sbl fsl">Free</span>' : ""; }; }
+
+  // title page of a free-only title: description, length, cast and genres from Cinemeta
+  function prep(t, d) {
+    if (t && !t._fsw && ON && can(t)) { t._fsw = 1; meta(t).catch(function () {}); if (t.type === "SHOW" || asia(t)) kkFind(t, 1); }   // Watch free starts faster
+    if (!t || !t.fs || (t.avail || []).length || t._fsp) return; t._fsp = 1;
+    meta(t).then(function (r) { var m = r.m || {};
+      if (!t.desc && m.description) t.desc = m.description;
+      var rt = /(\d+)/.exec(m.runtime || ""); if (rt && !t.runtime) t.runtime = +rt[1];
+      if (!t.imdb && +m.imdbRating) t.imdb = +m.imdbRating;
+      if (!(t.cast || []).length && m.cast) t.cast = m.cast.slice(0, 8);
+      if (!(t.dirs || []).length && m.director) t.dirs = [].concat(m.director).slice(0, 2);
+      if (t.type === "SHOW" && !t.seasons) { var ss = episodes(m); if (ss.length) { t.seasons = ss.length; t.eps = ss.reduce(function (a, s) { return a + s.eps.length; }, 0); } }
+      var de = d && d.querySelector(".desc"); if (de && de.isConnected && !de.textContent) de.textContent = t.desc || "";
+    }).catch(function () {});
+  }
+  // episode guide in the title page's format, for series TVmaze doesn't know
+  function guide(t) {
+    return meta(t).then(function (r) {
+      var by = {};
+      (r.m.videos || []).forEach(function (v) { if (!v.season || v.season < 1 || !v.number) return;
+        (by[v.season] = by[v.season] || []).push({ s: v.season, n: v.number, title: v.name || v.title || "Episode " + v.number, desc: v.overview || v.description || "",
+          runtime: null, date: (v.released || v.firstAired || "").slice(0, 10), img: v.thumbnail || null, sm: v.thumbnail || null, links: {} }); });
+      var ss = Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return { n: n, eps: by[n].sort(function (a, b) { return a.n - b.n; }) }; });
+      if (!ss.length) throw new Error("empty"); return ss;
+    }).catch(function (e) {   // not on Cinemeta: KissKH's own episode list
+      if (!t.kk) throw e;
+      return kkShard(t.kk).then(function (x) { if (!x || !x.e.length) throw e;
+        return [{ n: 1, eps: x.e.map(function (p) { return { s: 1, n: p[0], title: "Episode " + p[0], desc: "", runtime: null, date: "", img: x.th || null, sm: x.th || null, links: {} }; }) }]; });
+    });
+  }
+  // ---------- Search start card: where Vesper looks (your apps first, then ShowBox, then the free servers) ----------
+  var APPS = ["netflix", "amazon", "hotstar", "com.apple.appletv", "com.crunchyroll.webapp"];
+  function sources(page, rerun) {
+    var sbOn = !!(window.VSB && VSB.on()), d = document.createElement("div"); d.className = "srcs";
+    d.innerHTML = '<div class="srch">Where Vesper looks</div>' +
+      '<div class="src own"><div class="sic logos">' + APPS.map(function (a) { return '<img src="' + S.LOGO[a] + '" alt="' + esc(S.LABEL[a]) + '">'; }).join("") + '</div>' +
+        '<div class="stx"><b>Your apps <em>always first</em></b><small>' + APPS.map(function (a) { return esc(S.LABEL[a]); }).join(" · ") + ' — every title on them, opens right in the app.</small></div></div>' +
+      (window.VSB ? '<button class="src" data-srct="sb"><div class="sic sbx">SB</div><div class="stx"><b>ShowBox <i class="' + (sbOn ? "on" : "") + '">' + (sbOn ? "On" : "Off") + '</i></b><small>Films & series your apps don’t have — Play with FebBox.</small></div></button>' : "") +
+      '<button class="src" data-srct="fs"><div class="sic fsx"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="stx"><b>Free servers <i class="' + (ON ? "on" : "") + '">' + (ON ? "On" : "Off") + '</i></b><small>Anything ever made — streams right inside Vesper. If one server has nothing, the next is tried by itself.</small></div></button>';
+    d.addEventListener("click", function (e) { var b = e.target.closest("[data-srct]"); if (!b) return;
+      var tg = b.dataset.srct === "fs" ? page.querySelector(".fstog") : page.querySelector(".sbtog:not(.fstog):not(.nfwtog)"); if (tg) tg.click(); });
+    return d;
+  }
+  // ---------- Continue watching: wide cards that resume with one tap ----------
+  function cwNext(x, t) {   // what comes after the episode you stopped at (and is it new?)
+    if (x.type !== "series" || (x.nxAt && Date.now() - x.nxAt < 864e5)) return;
+    meta(t).then(function (r) { var flat = []; (r.m.videos || []).forEach(function (v) { if (v.season > 0 && v.number) flat.push(v); });
+      flat.sort(function (a, b) { return a.season - b.season || a.number - b.number; });
+      var after = x.fin ? flat.filter(function (v) { return v.season > x.s || (v.season === x.s && v.number > x.e); })[0] : null;
+      var rel = after && Date.parse(after.released || after.firstAired || "");
+      x.nx = after && (!rel || rel <= Date.now()) ? [after.season, after.number] : null; x.nxNew = !!(x.nx && rel && Date.now() - rel < 7 * 864e5); x.nxAt = Date.now();
+      if (CW[x.imdb]) { CW[x.imdb].nx = x.nx; CW[x.imdb].nxNew = x.nxNew; CW[x.imdb].nxAt = x.nxAt; sv("cw", CW); }
+    }).catch(function () {});
+  }
+  function cwCard(t) {
+    var x = t._cw || (t.imdb_id && CW[t.imdb_id]) || {}; cwNext(x, t);
+    if (x.fin && x.nx) { var nx = x.nx; return cwCardNext(t, x, nx); }
+    var pct = x.d ? Math.max(3, Math.min(100, x.c / x.d * 100)) : 0, left = x.d ? Math.max(1, Math.round((x.d - x.c) / 60)) : 0;
+    var c = document.createElement("div"); c.className = "cwc"; c.dataset.free = t.id; c.dataset.id = t.id;
+    c.innerHTML = '<div class="cwa"><img decoding="async" loading="lazy" src="' + esc(S.bd(t, "s1440") || S.po(t, "s592") || "") + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' +
+      '<div class="cwg"></div><div class="cwp"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
+      '<div class="cwt"><b>' + esc(t.title) + "</b><small>" + (x.type === "series" ? "S" + x.s + " · E" + x.e + " · " : "") + (left ? left + " min left" : "Resume") + '</small></div>' +
+      '<div class="cwb"><i style="width:' + pct.toFixed(0) + '%"></i></div></div>';
+    return c;
+  }
+  function cwCardNext(t, x, nx) {   // finished an episode: the card offers the next one
+    var c = document.createElement("div"); c.className = "cwc"; c.dataset.id = t.id; c.dataset.cwnext = nx[0] + ":" + nx[1];
+    c.innerHTML = '<div class="cwa"><img decoding="async" loading="lazy" src="' + esc(S.bd(t, "s1440") || S.po(t, "s592") || "") + '" onload="this.classList.add(\'ok\')" onerror="this.remove()">' +
+      '<div class="cwg"></div>' + (x.nxNew ? '<span class="cwnew">New episode</span>' : "") + '<div class="cwp"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
+      '<div class="cwt"><b>' + esc(t.title) + "</b><small>Up next · S" + nx[0] + " · E" + nx[1] + "</small></div></div>";
+    return c;
+  }
+  document.addEventListener("click", function (e) { var c = e.target.closest && e.target.closest("[data-cwnext]"); if (!c) return;
+    e.stopPropagation(); e.preventDefault(); var p = c.dataset.cwnext.split(":"); play(S.T[c.dataset.id], { s: +p[0], e: +p[1] }); }, true);
+  // ---------- seasonal banner (the aggregator's holiday card, Vesper-style) ----------
+  var FESTS = [
+    { k: "xmas", from: [11, 15], to: [12, 31], day: [12, 25], title: "Cozy up for the holidays.", sub: "Warm family films, classics and new favourites to share.", until: "to Christmas", q: "christmas",
+      re: /\b(christmas|xmas|santa|noel|holiday|grinch|mistletoe|sleigh|nutcracker|elf)\b/i, no: /baby reindeer/i, bg: "linear-gradient(135deg,#0d2a1f,#123a2a 55%,#1d2b1a)", acc: "#e3343c", lights: 1 },
+    { k: "nye", from: [1, 1], to: [1, 6], day: [1, 1], title: "A fresh start.", sub: "Big new-year energy: fresh beginnings and fun.", until: "", q: "new year", re: /\b(new year|fresh start|resolution)\b/i, bg: "linear-gradient(135deg,#141a4a,#2a1f5c 60%,#4b2a63)", acc: "#d9b45a" },
+    { k: "val", from: [2, 1], to: [2, 14], day: [2, 14], title: "Fall for something.", sub: "Love stories for two, or just for you.", until: "to Valentine's Day", q: "romance", re: /\b(love|romance|valentine|wedding|in love)\b/i, bg: "linear-gradient(135deg,#3a0f1f,#5a1630 60%,#2a0d1a)", acc: "#ff5c8a" },
+    { k: "hall", from: [10, 1], to: [10, 31], day: [10, 31], title: "Something wicked this way comes.", sub: "Haunted houses, slashers and spooky fun.", until: "to Halloween", q: "horror", re: /\b(halloween|haunt|ghost|witch|zombie|vampire|slasher|possess)/i, bg: "linear-gradient(135deg,#1a0f05,#3a1d06 60%,#140a1f)", acc: "#ff8a1f" }
+  ];
+  var festCache = null;
+  function fest() {
+    if (festCache !== null) return festCache || null;
+    var now = new Date(), md = (now.getMonth() + 1) * 100 + now.getDate();
+    var F = FESTS.filter(function (x) { return md >= x.from[0] * 100 + x.from[1] && md <= x.to[0] * 100 + x.to[1]; })[0];
+    if (!F) { festCache = false; return null; }
+    if (!S.ALL || S.ALL.length < 1000) return null;   // catalog not loaded yet: ask again next time
+    var hid = S.hiddenSet ? S.hiddenSet() : {};
+    var items = S.ALL.filter(function (t) { return !hid[t.id] && t.poster && !(F.no && F.no.test(t.title || "")) && F.re.test((t.title || "") + " " + (t.desc || "")); })
+      .sort(function (a, b) { return (F.re.test(b.title) ? 2 : 0) - (F.re.test(a.title) ? 2 : 0) || ((b.avail || []).length ? 1 : 0) - ((a.avail || []).length ? 1 : 0) || (b.votes || 0) - (a.votes || 0); }).slice(0, 24);
+    if (items.length < 5) { festCache = false; return null; }
+    var day = new Date(now.getFullYear() + (now.getMonth() + 1 > F.day[0] ? 1 : 0), F.day[0] - 1, F.day[1]), left = Math.ceil((day - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
+    festCache = { title: F.title, items: items, F: F, left: left }; return festCache;
+  }
+  function festEl(r) {
+    var fe = fest(), F = fe.F, el = document.createElement("div"); el.className = "row fest"; el._fill = function () {};
+    var fan = fe.items.slice(0, 5);
+    el.innerHTML = '<div class="fsc" style="background:' + F.bg + ';--acc:' + F.acc + '">' + (F.lights ? '<div class="fsl8">' + new Array(18).join("<i></i>") + "</div>" : "") +
+      '<div class="fsx1">' + (fe.left > 0 && F.until ? '<span class="fscd">' + fe.left + (fe.left === 1 ? " day " : " days ") + esc(F.until) + "</span>" : "") +
+      "<h3>" + esc(F.title) + "</h3><p>" + esc(F.sub) + '</p><div class="fsbt"><button class="fsgo" data-fsq="' + esc(F.q) + '">See picks</button><button class="fsdice" data-fsdice aria-label="Surprise me">🎲</button></div></div>' +
+      '<div class="fsfan">' + fan.map(function (t, i) { return '<img data-id="' + esc(t.id) + '" style="--i:' + (i - (fan.length - 1) / 2) + '" loading="lazy" src="' + esc(S.po(t, "s332")) + '" onerror="this.remove()">'; }).join("") + "</div></div>";
+    el.addEventListener("click", function (e) {
+      var q = e.target.closest("[data-fsq]"); if (q) { e.stopPropagation(); if (window.VUI && VUI.go) VUI.go("search", null, q.dataset.fsq); return; }
+      var im = e.target.closest(".fsfan img[data-id]"); if (im) { e.stopPropagation(); if (window.VUI) VUI.open(im.dataset.id); return; }
+      if (e.target.closest("[data-fsdice]")) { e.stopPropagation(); var t = fe.items[Math.floor(Math.random() * fe.items.length)]; if (window.VUI) VUI.open(t.id); }
+    });
+    return el;
+  }
+  (function () { var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate(); if (md < 1201 && md > 1115 || md >= 1201 && md <= 1231) {
+    var hat = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 8" shape-rendering="crispEdges"><rect x="3" y="2" width="4" height="1" fill="#d42a35"/><rect x="2" y="3" width="6" height="1" fill="#d42a35"/><rect x="4" y="1" width="3" height="1" fill="#d42a35"/><rect x="6" y="0" width="2" height="1" fill="#d42a35"/><rect x="8" y="0" width="2" height="2" fill="#fff"/><rect x="1" y="4" width="8" height="2" fill="#fff"/></svg>');
+    var st = document.createElement("style"); st.textContent = ".hrow .logo.pix{overflow:visible}.hrow{position:relative}.hrow .logo.pix+h1{position:relative}.hrow::before{content:'';position:absolute;left:3px;top:-3px;width:20px;height:16px;background:url(\"" + hat + "\") no-repeat center/contain;image-rendering:pixelated;z-index:2;pointer-events:none;transform:rotate(-14deg)}";
+    document.head.appendChild(st); } })();
+  window.VFS = { list: function (key) { return list(key); }, festEl: festEl, cwCard: cwCard, sources: sources, bar: bar, prep: prep, guide: guide, on: function () { return ON; }, toggle: toggle, searchInto: searchInto, play: play, btn: btn, can: can, T: T,
+    popped: function () { return close(true); }, open: function () { return !!(el && el.classList.contains("on")); } };
+})();
